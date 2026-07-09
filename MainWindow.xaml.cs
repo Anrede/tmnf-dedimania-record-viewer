@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace TmnfDedimaniaScraper;
@@ -18,8 +19,16 @@ public partial class MainWindow : Window
 {
     private readonly ObservableCollection<OnlineRecordRowView> _rows = new();
     private readonly ObservableCollection<SegmentRowView> _segments = new();
+    private readonly ObservableCollection<BookmarkItem> _bookmarks = new();
     private ExtractionResult? _lastExtraction;
     private bool _pageReady;
+    private string _currentPageTitle = string.Empty;
+
+    private static readonly string AppDataDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "TmnfDedimaniaScraper");
+
+    private static readonly string BookmarksFilePath = Path.Combine(AppDataDirectory, "bookmarks.json");
 
     public MainWindow()
     {
@@ -27,7 +36,9 @@ public partial class MainWindow : Window
 
         RecordsGrid.ItemsSource = _rows;
         SegmentsGrid.ItemsSource = _segments;
+        BookmarksItemsControl.ItemsSource = _bookmarks;
 
+        LoadBookmarks();
         Loaded += MainWindow_Loaded;
     }
 
@@ -42,19 +53,55 @@ public partial class MainWindow : Window
         StatusText.Text = "WebView2 başlatılıyor...";
         await Browser.EnsureCoreWebView2Async();
         Browser.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
+        Browser.CoreWebView2.HistoryChanged += CoreWebView2_HistoryChanged;
+        Browser.CoreWebView2.SourceChanged += CoreWebView2_SourceChanged;
+        Browser.CoreWebView2.DocumentTitleChanged += CoreWebView2_DocumentTitleChanged;
         Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
         Browser.CoreWebView2.Settings.IsStatusBarEnabled = true;
+        UpdateNavigationButtons();
         StatusText.Text = "WebView2 hazır.";
     }
 
     private void CoreWebView2_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         _pageReady = e.IsSuccess;
+        UpdateNavigationButtons();
         StatusText.Text = e.IsSuccess ? "Sayfa yüklendi." : "Sayfa yüklenemedi.";
+    }
+
+    private void CoreWebView2_HistoryChanged(object? sender, object e)
+    {
+        Dispatcher.Invoke(UpdateNavigationButtons);
+    }
+
+    private void CoreWebView2_SourceChanged(object? sender, CoreWebView2SourceChangedEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            UrlTextBox.Text = Browser.Source?.ToString() ?? Browser.CoreWebView2?.Source ?? UrlTextBox.Text;
+            UpdateNavigationButtons();
+        });
+    }
+
+    private void CoreWebView2_DocumentTitleChanged(object? sender, object e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            _currentPageTitle = Browser.CoreWebView2?.DocumentTitle ?? string.Empty;
+        });
     }
 
     private async void LoadButton_Click(object sender, RoutedEventArgs e)
     {
+        await NavigateAsync(UrlTextBox.Text);
+    }
+
+    private async void UrlTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+
+        e.Handled = true;
         await NavigateAsync(UrlTextBox.Text);
     }
 
@@ -63,10 +110,42 @@ public partial class MainWindow : Window
         if (Browser.CoreWebView2 is null)
             return;
 
+        string normalizedUrl = NormalizeUrl(url);
         _pageReady = false;
+        UrlTextBox.Text = normalizedUrl;
         StatusText.Text = "Sayfa açılıyor...";
-        Browser.CoreWebView2.Navigate(url);
+        Browser.CoreWebView2.Navigate(normalizedUrl);
         await Task.CompletedTask;
+    }
+
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (Browser.CoreWebView2?.CanGoBack == true)
+            Browser.CoreWebView2.GoBack();
+    }
+
+    private void ForwardButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (Browser.CoreWebView2?.CanGoForward == true)
+            Browser.CoreWebView2.GoForward();
+    }
+
+    private void ReloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (Browser.CoreWebView2 is null)
+            return;
+
+        _pageReady = false;
+        StatusText.Text = "Sayfa yenileniyor...";
+        Browser.CoreWebView2.Reload();
+    }
+
+    private void UpdateNavigationButtons()
+    {
+        bool browserReady = Browser.CoreWebView2 is not null;
+        BackButton.IsEnabled = browserReady && Browser.CoreWebView2!.CanGoBack;
+        ForwardButton.IsEnabled = browserReady && Browser.CoreWebView2!.CanGoForward;
+        ReloadButton.IsEnabled = browserReady;
     }
 
     private async void ScrapeButton_Click(object sender, RoutedEventArgs e)
@@ -339,6 +418,147 @@ public partial class MainWindow : Window
         StatusText.Text = $"JSON kaydedildi: {dialog.FileName}";
     }
 
+    private async void BookmarkButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not BookmarkItem bookmark)
+            return;
+
+        await NavigateAsync(bookmark.Url);
+        StatusText.Text = $"Yer imi açıldı: {bookmark.Title}";
+    }
+
+    private void AddBookmarkButton_Click(object sender, RoutedEventArgs e)
+    {
+        string url = GetCurrentUrl();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            MessageBox.Show("Kaydedilecek bir URL bulunamadı.");
+            return;
+        }
+
+        string normalizedUrl = NormalizeUrl(url);
+        string title = BuildBookmarkTitle(normalizedUrl);
+
+        var existing = _bookmarks.FirstOrDefault(b => string.Equals(b.Url, normalizedUrl, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            existing.Title = title;
+            SaveBookmarks();
+            RefreshBookmarksBar();
+            StatusText.Text = "Yer imi zaten vardı, başlığı güncellendi.";
+            return;
+        }
+
+        _bookmarks.Add(new BookmarkItem { Title = title, Url = normalizedUrl });
+        SaveBookmarks();
+        StatusText.Text = $"Yer imi kaydedildi: {title}";
+    }
+
+    private void RemoveBookmarkButton_Click(object sender, RoutedEventArgs e)
+    {
+        string normalizedUrl = NormalizeUrl(GetCurrentUrl());
+        var existing = _bookmarks.FirstOrDefault(b => string.Equals(b.Url, normalizedUrl, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is null)
+        {
+            MessageBox.Show("Bu URL için kayıtlı bir yer imi bulunamadı.");
+            return;
+        }
+
+        _bookmarks.Remove(existing);
+        SaveBookmarks();
+        StatusText.Text = $"Yer imi silindi: {existing.Title}";
+    }
+
+    private string GetCurrentUrl()
+    {
+        return Browser.Source?.ToString()
+               ?? Browser.CoreWebView2?.Source
+               ?? UrlTextBox.Text
+               ?? string.Empty;
+    }
+
+    private string BuildBookmarkTitle(string url)
+    {
+        if (!string.IsNullOrWhiteSpace(_currentPageTitle))
+        {
+            return TrimForDisplay(_currentPageTitle, 42);
+        }
+
+        try
+        {
+            var uri = new Uri(url);
+            string title = uri.AbsolutePath.Trim('/');
+            if (string.IsNullOrWhiteSpace(title))
+                title = uri.Host;
+            else
+                title = $"{uri.Host}{uri.AbsolutePath}";
+
+            return TrimForDisplay(title, 42);
+        }
+        catch
+        {
+            return TrimForDisplay(url, 42);
+        }
+    }
+
+    private static string TrimForDisplay(string text, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length <= maxLength)
+            return text;
+
+        return text[..(maxLength - 1)] + "…";
+    }
+
+    private void LoadBookmarks()
+    {
+        try
+        {
+            Directory.CreateDirectory(AppDataDirectory);
+
+            if (!File.Exists(BookmarksFilePath))
+                return;
+
+            var loaded = JsonSerializer.Deserialize<List<BookmarkItem>>(File.ReadAllText(BookmarksFilePath), JsonOptions) ?? new List<BookmarkItem>();
+            _bookmarks.Clear();
+
+            foreach (var bookmark in loaded.Where(b => !string.IsNullOrWhiteSpace(b.Url)))
+                _bookmarks.Add(bookmark);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Yer imleri yüklenemedi: {ex.Message}";
+        }
+    }
+
+    private void SaveBookmarks()
+    {
+        Directory.CreateDirectory(AppDataDirectory);
+        File.WriteAllText(BookmarksFilePath, JsonSerializer.Serialize(_bookmarks, JsonOptions));
+        RefreshBookmarksBar();
+    }
+
+    private void RefreshBookmarksBar()
+    {
+        BookmarksItemsControl.ItemsSource = null;
+        BookmarksItemsControl.ItemsSource = _bookmarks;
+    }
+
+    private static string NormalizeUrl(string? rawUrl)
+    {
+        string url = (rawUrl ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(url))
+            return "https://tmnf.exchange/trackshow/9684537";
+
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            url = "https://" + url;
+        }
+
+        return url;
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -577,6 +797,12 @@ public sealed class SegmentRowView
     public string FontStyle { get; set; } = string.Empty;
     public string TextDecoration { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
+}
+
+public sealed class BookmarkItem
+{
+    public string Title { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
 }
 
 public sealed class CssColorToBrushConverter : IValueConverter
