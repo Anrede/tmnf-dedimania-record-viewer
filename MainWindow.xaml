@@ -341,7 +341,7 @@
                         </Grid>
                     </Grid>
 
-                    <DataGrid Grid.Row="1" x:Name="SegmentsGrid" AutoGenerateColumns="False" CanUserSortColumns="False" SelectionChanged="SegmentsGrid_SelectionChanged" BeginningEdit="SegmentsGrid_BeginningEdit">
+                    <DataGrid Grid.Row="1" x:Name="SegmentsGrid" HeadersVisibility="Column" RowHeaderWidth="0" RowDetailsVisibilityMode="Collapsed" AutoGenerateColumns="False" CanUserSortColumns="False" SelectionChanged="SegmentsGrid_SelectionChanged" BeginningEdit="SegmentsGrid_BeginningEdit">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Field" Binding="{Binding CellName}" Width="72" IsReadOnly="True"/>
                             <DataGridTemplateColumn Header="Swatch" Width="50">
@@ -429,7 +429,7 @@
                             </DockPanel>
 
                             <Grid Grid.Row="1">
-                                <DataGrid x:Name="RecordsGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="RecordsGrid_SelectionChanged">
+                                <DataGrid x:Name="RecordsGrid" HeadersVisibility="Column" RowHeaderWidth="0" RowDetailsVisibilityMode="Collapsed" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="RecordsGrid_SelectionChanged">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                                         <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -439,7 +439,7 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
 
-                                <DataGrid x:Name="OfflineRecordsGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed" SelectionChanged="OfflineRecordsGrid_SelectionChanged">
+                                <DataGrid x:Name="OfflineRecordsGrid" HeadersVisibility="Column" RowHeaderWidth="0" RowDetailsVisibilityMode="Collapsed" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed" SelectionChanged="OfflineRecordsGrid_SelectionChanged">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                                         <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -468,7 +468,17 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Text="Custom tables" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <Grid Grid.Row="0" Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Custom tables" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button x:Name="ShowRecordsSettingsButton" Style="{StaticResource SecondaryButtonStyle}" Width="92" Height="30" Margin="0,0,12,0" Click="ShowRecordsSettingsButton_Click" Content="Settings"/>
+                                    <Button x:Name="ShowRecordsButton" Style="{StaticResource SecondaryButtonStyle}" Width="110" Height="30" Click="ShowRecordsButton_Click" Content="Show Records"/>
+                                </StackPanel>
+                            </Grid>
 
                             <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
@@ -508,7 +518,7 @@
                                             <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Remove Selected"/>
                                         </Grid>
 
-                                        <DataGrid Grid.Row="2" x:Name="Table1Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table1Grid_SelectionChanged">
+                                        <DataGrid Grid.Row="2" x:Name="Table1Grid" HeadersVisibility="Column" RowHeaderWidth="0" RowDetailsVisibilityMode="Collapsed" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table1Grid_SelectionChanged">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                                                 <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -549,7 +559,7 @@
                                             <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Remove Selected"/>
                                         </Grid>
 
-                                        <DataGrid Grid.Row="2" x:Name="Table2Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table2Grid_SelectionChanged">
+                                        <DataGrid Grid.Row="2" x:Name="Table2Grid" HeadersVisibility="Column" RowHeaderWidth="0" RowDetailsVisibilityMode="Collapsed" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table2Grid_SelectionChanged">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                                                 <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -579,7 +589,7 @@
                             </Grid.RowDefinitions>
 
                             <TextBlock Text="Preview" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                            <DataGrid Grid.Row="1" x:Name="PreviewGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" SelectionMode="Single" SelectionUnit="FullRow">
+                            <DataGrid Grid.Row="1" x:Name="PreviewGrid" HeadersVisibility="Column" RowHeaderWidth="0" RowDetailsVisibilityMode="Collapsed" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" SelectionMode="Single" SelectionUnit="FullRow">
                                 <DataGrid.Columns>
                                     <DataGridTemplateColumn x:Name="PreviewRankColumn" Header="#" Width="90">
                                         <DataGridTemplateColumn.CellTemplate>

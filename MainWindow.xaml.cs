@@ -1,4 +1,5 @@
 using Microsoft.Web.WebView2.Core;
+using System.Collections.Specialized;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -48,6 +49,9 @@ public partial class MainWindow : Window
     private Color? _pendingEditorColor;
     private string _currentTrackName = string.Empty;
     private bool _showOfflineRecords;
+    private RecordsDisplayWindow? _recordsDisplayWindow;
+    private RecordsDisplaySettingsWindow? _recordsDisplaySettingsWindow;
+    private RecordsDisplaySettings _recordsDisplaySettings = RecordsDisplaySettings.CreateDefault();
 
     private const string AppFolderName = "TmnfDedimaniaScraper";
     private static string AppDataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolderName);
@@ -84,6 +88,8 @@ public partial class MainWindow : Window
         SetRecordsTab(false);
         UpdateMergeButtonState();
         BookmarksItemsControl.ItemsSource = _bookmarks;
+        _table1Rows.CollectionChanged += CustomTableRows_CollectionChanged;
+        _table2Rows.CollectionChanged += CustomTableRows_CollectionChanged;
         LoadBookmarks();
         _loadedAppState = LoadAppState();
         ApplyLoadedState(_loadedAppState);
@@ -113,6 +119,18 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if (_recordsDisplaySettingsWindow is not null)
+        {
+            _recordsDisplaySettingsWindow.Close();
+            _recordsDisplaySettingsWindow = null;
+        }
+
+        if (_recordsDisplayWindow is not null)
+        {
+            _recordsDisplayWindow.Close();
+            _recordsDisplayWindow = null;
+        }
+
         SaveAppStateImmediate();
     }
 
@@ -178,6 +196,96 @@ public partial class MainWindow : Window
 
         MergeOfflineButton.IsEnabled = _offlineRows.Count > 0;
         MergeOfflineButton.Opacity = MergeOfflineButton.IsEnabled ? 1.0 : 0.55;
+    }
+
+    private void CustomTableRows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        UpdateRecordsDisplayWindow();
+    }
+
+    private void ShowRecordsSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_recordsDisplaySettingsWindow is not null && _recordsDisplaySettingsWindow.IsVisible)
+        {
+            _recordsDisplaySettingsWindow.Close();
+            return;
+        }
+
+        EnsureRecordsDisplaySettingsWindow();
+        _recordsDisplaySettingsWindow!.LoadSettings(_recordsDisplaySettings);
+        _recordsDisplaySettingsWindow.Show();
+        _recordsDisplaySettingsWindow.Activate();
+    }
+
+    private void RecordsDisplaySettingsWindow_SettingsApplied(RecordsDisplaySettings e)
+    {
+        _recordsDisplaySettings = RecordDisplaySettingsHelper.Sanitize(e);
+        RenumberCustomTable(_table1Rows);
+        RenumberCustomTable(_table2Rows);
+        UpdateRecordsDisplayWindow();
+        QueueSaveState();
+    }
+
+    private void EnsureRecordsDisplaySettingsWindow()
+    {
+        if (_recordsDisplaySettingsWindow is not null)
+            return;
+
+        _recordsDisplaySettingsWindow = new RecordsDisplaySettingsWindow();
+        _recordsDisplaySettingsWindow.SettingsApplied += RecordsDisplaySettingsWindow_SettingsApplied;
+        _recordsDisplaySettingsWindow.Closed += RecordsDisplaySettingsWindow_Closed;
+    }
+
+    private void RecordsDisplaySettingsWindow_Closed(object? sender, EventArgs e)
+    {
+        if (_recordsDisplaySettingsWindow is not null)
+        {
+            _recordsDisplaySettings = RecordDisplaySettingsHelper.Sanitize(_recordsDisplaySettingsWindow.GetSettingsForPersistence());
+            _recordsDisplaySettingsWindow.SettingsApplied -= RecordsDisplaySettingsWindow_SettingsApplied;
+            _recordsDisplaySettingsWindow.Closed -= RecordsDisplaySettingsWindow_Closed;
+            QueueSaveState();
+        }
+
+        _recordsDisplaySettingsWindow = null;
+    }
+
+    private void ShowRecordsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_recordsDisplayWindow is not null && _recordsDisplayWindow.IsVisible)
+        {
+            _recordsDisplayWindow.Close();
+            return;
+        }
+
+        EnsureRecordsDisplayWindow();
+        UpdateRecordsDisplayWindow();
+        _recordsDisplayWindow!.Show();
+        _recordsDisplayWindow.Activate();
+    }
+
+    private void EnsureRecordsDisplayWindow()
+    {
+        if (_recordsDisplayWindow is not null)
+            return;
+
+        _recordsDisplayWindow = new RecordsDisplayWindow();
+        _recordsDisplayWindow.Closed += RecordsDisplayWindow_Closed;
+    }
+
+    private void RecordsDisplayWindow_Closed(object? sender, EventArgs e)
+    {
+        if (_recordsDisplayWindow is not null)
+            _recordsDisplayWindow.Closed -= RecordsDisplayWindow_Closed;
+
+        _recordsDisplayWindow = null;
+    }
+
+    private void UpdateRecordsDisplayWindow()
+    {
+        if (_recordsDisplayWindow is null)
+            return;
+
+        _recordsDisplayWindow.SetTables(_table1Rows, _table2Rows, _currentTrackName, _recordsDisplaySettings);
     }
 
     private void PushUndoSnapshot()
@@ -338,6 +446,7 @@ public partial class MainWindow : Window
 
             _lastImportExportDirectory = NormalizeExistingDirectory(state.LastImportExportDirectory);
             _showOfflineRecords = state.ShowOfflineRecordsTab;
+            _recordsDisplaySettings = RecordDisplaySettingsHelper.Sanitize(state.RecordsDisplaySettings);
             RestoreResultState(state);
             SetRecordsTab(_showOfflineRecords);
             UpdateMergeButtonState();
@@ -576,6 +685,7 @@ public partial class MainWindow : Window
             Table2InsertText = Table2RankInput.Text ?? string.Empty,
             LastImportExportDirectory = _lastImportExportDirectory,
             ShowOfflineRecordsTab = _showOfflineRecords,
+            RecordsDisplaySettings = RecordsDisplaySettingsCloner.Clone(_recordsDisplaySettings),
             Selection = new SelectionState
             {
                 Source = _currentSelectionSource,
@@ -969,6 +1079,7 @@ public partial class MainWindow : Window
         ResetPreview();
         ResetSelectedSegmentEditor();
         UpdateMergeButtonState();
+        UpdateRecordsDisplayWindow();
     }
 
     private void FillGrids(ExtractionResult extraction)
@@ -1016,6 +1127,8 @@ public partial class MainWindow : Window
         {
             ResetPreview();
         }
+
+        UpdateRecordsDisplayWindow();
     }
 
     private void PopulateOnlineCustomTables(IEnumerable<OnlineRecord> onlineRecords)
@@ -1057,6 +1170,7 @@ public partial class MainWindow : Window
             Table2Grid.SelectedIndex = 0;
 
         StatusText.Text = $"Offline records merged into Table 1 and Table 2 ({_lastExtraction.OfflineRecords.Count} offline).";
+        UpdateRecordsDisplayWindow();
         QueueSaveState();
     }
 
@@ -1486,6 +1600,8 @@ public partial class MainWindow : Window
 
         foreach (var row in _table2Rows)
             row.RefreshFromSource();
+
+        UpdateRecordsDisplayWindow();
     }
 
     private void SegmentsGrid_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
@@ -2192,7 +2308,7 @@ public partial class MainWindow : Window
         int index = 1;
         foreach (var row in rows)
         {
-            RankFormattingHelper.ApplyOrdinalRank(row.Source.Rank, index);
+            RankFormattingHelper.ApplyOrdinalRank(row.Source.Rank, index, _recordsDisplaySettings.ShowCount >= 10);
             row.RefreshFromSource();
             index++;
         }
@@ -2918,9 +3034,9 @@ public static class ExtractionResultCloner
 
 public static class RankFormattingHelper
 {
-    public static void ApplyOrdinalRank(CellData cell, int index)
+    public static void ApplyOrdinalRank(CellData cell, int index, bool padSingleDigit)
     {
-        string text = Ordinal(index);
+        string text = FixedWidthRank(index, padSingleDigit);
 
         if (cell.Segments.Count == 0)
         {
@@ -2949,21 +3065,12 @@ public static class RankFormattingHelper
         cell.Text = text;
     }
 
-    public static string Ordinal(int number)
+    public static string FixedWidthRank(int number, bool padSingleDigit)
     {
-        int abs = Math.Abs(number);
-        int lastTwo = abs % 100;
-        string suffix = lastTwo is >= 11 and <= 13
-            ? "th"
-            : (abs % 10) switch
-            {
-                1 => "st",
-                2 => "nd",
-                3 => "rd",
-                _ => "th"
-            };
+        if (number < 10)
+            return padSingleDigit ? $"  {number}." : $"{number}.";
 
-        return $"{number}{suffix}";
+        return $"{number}.";
     }
 }
 
@@ -3305,6 +3412,7 @@ public sealed class AppState
     public List<BookmarkStateItem> Bookmarks { get; set; } = new();
     public string LastImportExportDirectory { get; set; } = string.Empty;
     public bool ShowOfflineRecordsTab { get; set; }
+    public RecordsDisplaySettings RecordsDisplaySettings { get; set; } = RecordsDisplaySettings.CreateDefault();
     public SelectionState? Selection { get; set; }
     public List<GridColumnState> ColumnWidths { get; set; } = new();
     public List<LayoutLengthState> LayoutLengths { get; set; } = new();
