@@ -476,7 +476,7 @@
                                 <TextBlock Text="Custom tables" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button x:Name="ShowRecordsSettingsButton" Style="{StaticResource SecondaryButtonStyle}" Width="92" Height="30" Margin="0,0,12,0" Click="ShowRecordsSettingsButton_Click" Content="Settings"/>
-                                    <Button x:Name="ShowRecordsButton" Style="{StaticResource SecondaryButtonStyle}" Width="110" Height="30" Click="ShowRecordsButton_Click" Content="Show Records"/>
+                                    <Button x:Name="ShowRecordsButton" Style="{StaticResource SecondaryButtonStyle}" Width="110" Height="30" Click="ShowRecordsButton_Click" Content="Show Records (F2)"/>
                                 </StackPanel>
                             </Grid>
 

@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -68,6 +69,8 @@ public partial class MainWindow : Window
     private bool _isApplyingHistoryState;
     private const int MaxHistoryStates = 100;
 
+    private System.Windows.Interop.HwndSource? _hotkeySource;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -100,6 +103,8 @@ public partial class MainWindow : Window
         SizeChanged += WindowGeometryChanged;
         StateChanged += WindowGeometryChanged;
         PreviewKeyDown += Window_PreviewKeyDown;
+
+        SourceInitialized += MainWindow_SourceInitialized;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -130,6 +135,8 @@ public partial class MainWindow : Window
             _recordsDisplayWindow.Close();
             _recordsDisplayWindow = null;
         }
+
+        UnregisterGlobalHotkeys();
 
         SaveAppStateImmediate();
     }
@@ -212,6 +219,7 @@ public partial class MainWindow : Window
         }
 
         EnsureRecordsDisplaySettingsWindow();
+        _recordsDisplaySettingsWindow!.Owner = this;
         _recordsDisplaySettingsWindow!.LoadSettings(_recordsDisplaySettings);
         _recordsDisplaySettingsWindow.Show();
         _recordsDisplaySettingsWindow.Activate();
@@ -251,16 +259,7 @@ public partial class MainWindow : Window
 
     private void ShowRecordsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_recordsDisplayWindow is not null && _recordsDisplayWindow.IsVisible)
-        {
-            _recordsDisplayWindow.Close();
-            return;
-        }
-
-        EnsureRecordsDisplayWindow();
-        UpdateRecordsDisplayWindow();
-        _recordsDisplayWindow!.Show();
-        _recordsDisplayWindow.Activate();
+        ToggleRecordsOverlayVisibility();
     }
 
     private void EnsureRecordsDisplayWindow()
@@ -286,6 +285,102 @@ public partial class MainWindow : Window
             return;
 
         _recordsDisplayWindow.SetTables(_table1Rows, _table2Rows, _currentTrackName, _recordsDisplaySettings);
+    }
+
+
+    private void ToggleRecordsOverlayVisibility()
+    {
+        EnsureRecordsDisplayWindow();
+        UpdateRecordsDisplayWindow();
+
+        if (_recordsDisplayWindow is null)
+            return;
+
+        if (!_recordsDisplayWindow.IsVisible)
+        {
+            _recordsDisplayWindow.Show();
+            _recordsDisplayWindow.SetOverlayMode(true);
+            return;
+        }
+
+        if (_recordsDisplayWindow.IsOverlayMode)
+        {
+            _recordsDisplayWindow.SetOverlayMode(false);
+            _recordsDisplayWindow.Hide();
+            return;
+        }
+
+        _recordsDisplayWindow.SetOverlayMode(true);
+    }
+
+    private void ToggleRecordsOverlayFromHotkey()
+    {
+        ToggleRecordsOverlayVisibility();
+    }
+
+    private void ToggleRecordsTableFromHotkey()
+    {
+        if (_recordsDisplayWindow is null || !_recordsDisplayWindow.IsVisible || !_recordsDisplayWindow.IsOverlayMode)
+            return;
+
+        UpdateRecordsDisplayWindow();
+        _recordsDisplayWindow.ToggleVisibleTableFromExternalHotkey();
+    }
+
+
+    private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        RegisterGlobalHotkeys();
+    }
+
+    private void RegisterGlobalHotkeys()
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        _hotkeySource ??= System.Windows.Interop.HwndSource.FromHwnd(hwnd);
+        _hotkeySource?.RemoveHook(WndProc);
+        _hotkeySource?.AddHook(WndProc);
+
+        RegisterHotKey(hwnd, HOTKEY_ID_F2, 0, VK_F2);
+        RegisterHotKey(hwnd, HOTKEY_ID_F3, 0, VK_F3);
+    }
+
+    private void UnregisterGlobalHotkeys()
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero)
+        {
+            UnregisterHotKey(hwnd, HOTKEY_ID_F2);
+            UnregisterHotKey(hwnd, HOTKEY_ID_F3);
+        }
+
+        if (_hotkeySource is not null)
+        {
+            _hotkeySource.RemoveHook(WndProc);
+            _hotkeySource = null;
+        }
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_HOTKEY)
+        {
+            int id = wParam.ToInt32();
+            if (id == HOTKEY_ID_F2)
+            {
+                Dispatcher.BeginInvoke(new Action(ToggleRecordsOverlayFromHotkey));
+                handled = true;
+            }
+            else if (id == HOTKEY_ID_F3)
+            {
+                Dispatcher.BeginInvoke(new Action(ToggleRecordsTableFromHotkey));
+                handled = true;
+            }
+        }
+
+        return IntPtr.Zero;
     }
 
     private void PushUndoSnapshot()
@@ -2831,6 +2926,18 @@ public partial class MainWindow : Window
     };
 })();
 """;
+
+    private const int WM_HOTKEY = 0x0312;
+    private const int HOTKEY_ID_F2 = 9001;
+    private const int HOTKEY_ID_F3 = 9002;
+    private const uint VK_F2 = 0x71;
+    private const uint VK_F3 = 0x72;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 }
 
 public enum SelectionSource

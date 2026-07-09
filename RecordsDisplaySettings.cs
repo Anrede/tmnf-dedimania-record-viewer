@@ -20,6 +20,7 @@ public sealed class RecordsDisplaySettings
     public double TimeBySpacing { get; set; } = 10;
     public string BackgroundColor { get; set; } = "rgb(18, 18, 18)";
     public double BackgroundOpacity { get; set; } = 0.92;
+    public double BorderRadius { get; set; } = 12;
     public double SettingsWindowLeft { get; set; } = 140;
     public double SettingsWindowTop { get; set; } = 120;
     public double SettingsWindowWidth { get; set; } = 420;
@@ -107,6 +108,7 @@ public static class RecordDisplaySettingsHelper
         settings.RankTimeSpacing = SanitizeDouble(settings.RankTimeSpacing, 8, 0, 100);
         settings.TimeBySpacing = SanitizeDouble(settings.TimeBySpacing, 10, 0, 100);
         settings.BackgroundOpacity = SanitizeDouble(settings.BackgroundOpacity, 0.92, 0, 1);
+        settings.BorderRadius = SanitizeDouble(settings.BorderRadius, 12, 0, 120);
         settings.SettingsWindowLeft = SanitizeDouble(settings.SettingsWindowLeft, 140, 0, 10000);
         settings.SettingsWindowTop = SanitizeDouble(settings.SettingsWindowTop, 120, 0, 10000);
         settings.SettingsWindowWidth = SanitizeDouble(settings.SettingsWindowWidth, 420, 320, 2000);

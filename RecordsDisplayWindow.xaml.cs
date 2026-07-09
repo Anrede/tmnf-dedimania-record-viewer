@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 
 namespace TmnfDedimaniaScraper;
 
@@ -17,12 +19,20 @@ public partial class RecordsDisplayWindow : Window
     private RecordsDisplaySettings _settings = RecordsDisplaySettings.CreateDefault();
     private bool _showTable1 = true;
     private string _trackName = string.Empty;
-    private bool _isAnimating;
+    private bool _overlayMode;
+    private DispatcherTimer? _topmostTimer;
 
     public RecordsDisplayWindow()
     {
         InitializeComponent();
         RowsItemsControl.ItemsSource = _displayRows;
+        Closed += (_, _) => StopTopmostTimer();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        ApplyOverlayModeToHandle();
     }
 
     public void SetTables(IEnumerable<RankTimeByRowView> table1Rows, IEnumerable<RankTimeByRowView> table2Rows, string trackName, RecordsDisplaySettings settings)
@@ -41,6 +51,106 @@ public partial class RecordsDisplayWindow : Window
         _trackName = trackName ?? string.Empty;
         ApplyWindowSettings();
         RefreshVisibleTable();
+    }
+
+
+    public bool IsOverlayMode => _overlayMode;
+
+    public void SetOverlayMode(bool enabled)
+    {
+        if (_overlayMode == enabled)
+        {
+            if (_overlayMode)
+                ReassertTopmost();
+            return;
+        }
+
+        _overlayMode = enabled;
+        ApplyOverlayModeToHandle();
+    }
+
+    public void ToggleOverlayMode()
+    {
+        SetOverlayMode(!_overlayMode);
+    }
+
+    public void ToggleVisibleTableFromExternalHotkey()
+    {
+        ToggleVisibleTableWithAnimation();
+        ReassertTopmost();
+    }
+
+    private void ApplyOverlayModeToHandle()
+    {
+        Topmost = _overlayMode;
+        ShowInTaskbar = !_overlayMode;
+
+        if (!HasSourceHandle())
+        {
+            if (_overlayMode)
+                StartTopmostTimer();
+            else
+                StopTopmostTimer();
+            return;
+        }
+
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        int style = GetWindowLong(hwnd, GWL_EXSTYLE);
+
+        if (_overlayMode)
+            style |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+        else
+            style &= ~(WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
+
+        SetWindowLong(hwnd, GWL_EXSTYLE, style);
+        SetWindowPos(
+            hwnd,
+            _overlayMode ? HWND_TOPMOST : HWND_NOTOPMOST,
+            0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+        if (_overlayMode)
+            StartTopmostTimer();
+        else
+            StopTopmostTimer();
+    }
+
+    private void StartTopmostTimer()
+    {
+        _topmostTimer ??= new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+
+        _topmostTimer.Tick -= TopmostTimer_Tick;
+        _topmostTimer.Tick += TopmostTimer_Tick;
+        _topmostTimer.Start();
+    }
+
+    private void StopTopmostTimer()
+    {
+        if (_topmostTimer is not null)
+            _topmostTimer.Stop();
+    }
+
+    private void TopmostTimer_Tick(object? sender, EventArgs e)
+    {
+        ReassertTopmost();
+    }
+
+    private void ReassertTopmost()
+    {
+        if (!_overlayMode || !HasSourceHandle() || !IsVisible || WindowState == WindowState.Minimized)
+            return;
+
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+
+    private bool HasSourceHandle()
+    {
+        return System.Windows.PresentationSource.FromVisual(this) is not null;
     }
 
     private void ApplyWindowSettings()
@@ -66,7 +176,9 @@ public partial class RecordsDisplayWindow : Window
             ContainerBorder.Background = new SolidColorBrush(Color.FromArgb(220, 17, 17, 17));
         }
 
-        ResetAnimationState();
+        ContainerBorder.CornerRadius = new CornerRadius(Math.Clamp(_settings.BorderRadius, 0, 120));
+
+        NormalizeAnimationState();
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -80,22 +192,18 @@ public partial class RecordsDisplayWindow : Window
 
     private void ToggleVisibleTableWithAnimation()
     {
-        if (_isAnimating)
-            return;
-
         string preset = _settings.TransformAnimation ?? RecordDisplayAnimationPresets.Slide;
         if (string.Equals(preset, RecordDisplayAnimationPresets.None, StringComparison.OrdinalIgnoreCase) || !IsLoaded)
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
+            SwitchToTargetTable(!_showTable1);
+            NormalizeAnimationState();
             return;
         }
 
-        _isAnimating = true;
         PlayTransition(preset);
     }
 
-    private void ResetAnimationState()
+    private void NormalizeAnimationState()
     {
         ListTransform.BeginAnimation(TranslateTransform.XProperty, null);
         ListTransform.BeginAnimation(TranslateTransform.YProperty, null);
@@ -108,6 +216,22 @@ public partial class RecordsDisplayWindow : Window
         ListTransform.Y = 0d;
         ListScaleTransform.ScaleX = 1d;
         ListScaleTransform.ScaleY = 1d;
+    }
+
+    private TransitionSnapshot CaptureCurrentVisualState()
+    {
+        return new TransitionSnapshot(
+            RowsItemsControl.Opacity,
+            ListTransform.X,
+            ListTransform.Y,
+            ListScaleTransform.ScaleX,
+            ListScaleTransform.ScaleY);
+    }
+
+    private void SwitchToTargetTable(bool showTable1)
+    {
+        _showTable1 = showTable1;
+        RefreshVisibleTable();
     }
 
     private void PlayTransition(string preset)
@@ -147,22 +271,23 @@ public partial class RecordsDisplayWindow : Window
 
     private void PlayFadeTransition()
     {
-        ResetAnimationState();
-        RowsItemsControl.Opacity = 1d;
+        var state = CaptureCurrentVisualState();
 
         var fadeOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.Opacity,
             To = 0d,
             Duration = TimeSpan.FromMilliseconds(180)
         };
 
         fadeOut.Completed += (_, _) =>
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
-            ResetAnimationState();
+            SwitchToTargetTable(!_showTable1);
             RowsItemsControl.Opacity = 0d;
+            ListTransform.X = 0d;
+            ListTransform.Y = 0d;
+            ListScaleTransform.ScaleX = 1d;
+            ListScaleTransform.ScaleY = 1d;
 
             var fadeIn = new DoubleAnimation
             {
@@ -173,8 +298,7 @@ public partial class RecordsDisplayWindow : Window
 
             fadeIn.Completed += (_, _) =>
             {
-                ResetAnimationState();
-                _isAnimating = false;
+                NormalizeAnimationState();
             };
 
             RowsItemsControl.BeginAnimation(UIElement.OpacityProperty, fadeIn);
@@ -185,37 +309,36 @@ public partial class RecordsDisplayWindow : Window
 
     private void PlaySlideTransition()
     {
-        ResetAnimationState();
+        var state = CaptureCurrentVisualState();
+        double direction = !_showTable1 ? -1d : 1d;
 
-        double slideOutTo = _showTable1 ? 20d : -20d;
         var slideOut = new DoubleAnimation
         {
-            From = 0d,
-            To = slideOutTo,
+            From = state.X,
+            To = 20d * direction,
             Duration = TimeSpan.FromMilliseconds(180),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
         };
 
         var fadeOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.Opacity,
             To = 0d,
             Duration = TimeSpan.FromMilliseconds(180)
         };
 
         fadeOut.Completed += (_, _) =>
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
-
-            double slideInFrom = _showTable1 ? -20d : 20d;
-            ResetAnimationState();
-            ListTransform.X = slideInFrom;
+            SwitchToTargetTable(!_showTable1);
+            ListTransform.X = -20d * direction;
+            ListTransform.Y = 0d;
+            ListScaleTransform.ScaleX = 1d;
+            ListScaleTransform.ScaleY = 1d;
             RowsItemsControl.Opacity = 0d;
 
             var slideIn = new DoubleAnimation
             {
-                From = slideInFrom,
+                From = -20d * direction,
                 To = 0d,
                 Duration = TimeSpan.FromMilliseconds(220),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
@@ -230,8 +353,7 @@ public partial class RecordsDisplayWindow : Window
 
             fadeIn.Completed += (_, _) =>
             {
-                ResetAnimationState();
-                _isAnimating = false;
+                NormalizeAnimationState();
             };
 
             ListTransform.BeginAnimation(TranslateTransform.XProperty, slideIn);
@@ -244,11 +366,11 @@ public partial class RecordsDisplayWindow : Window
 
     private void PlayVerticalFadeTransition()
     {
-        ResetAnimationState();
+        var state = CaptureCurrentVisualState();
 
         var slideOut = new DoubleAnimation
         {
-            From = 0d,
+            From = state.Y,
             To = 20d,
             Duration = TimeSpan.FromMilliseconds(200),
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
@@ -256,18 +378,18 @@ public partial class RecordsDisplayWindow : Window
 
         var fadeOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.Opacity,
             To = 0d,
             Duration = TimeSpan.FromMilliseconds(200)
         };
 
         fadeOut.Completed += (_, _) =>
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
-
-            ResetAnimationState();
+            SwitchToTargetTable(!_showTable1);
+            ListTransform.X = 0d;
             ListTransform.Y = -20d;
+            ListScaleTransform.ScaleX = 1d;
+            ListScaleTransform.ScaleY = 1d;
             RowsItemsControl.Opacity = 0d;
 
             var slideIn = new DoubleAnimation
@@ -287,8 +409,7 @@ public partial class RecordsDisplayWindow : Window
 
             fadeIn.Completed += (_, _) =>
             {
-                ResetAnimationState();
-                _isAnimating = false;
+                NormalizeAnimationState();
             };
 
             ListTransform.BeginAnimation(TranslateTransform.YProperty, slideIn);
@@ -302,11 +423,11 @@ public partial class RecordsDisplayWindow : Window
 
     private void PlayZoomFadeTransition()
     {
-        ResetAnimationState();
+        var state = CaptureCurrentVisualState();
 
         var scaleOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.ScaleX,
             To = 0.94d,
             Duration = TimeSpan.FromMilliseconds(170),
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
@@ -314,17 +435,16 @@ public partial class RecordsDisplayWindow : Window
 
         var fadeOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.Opacity,
             To = 0d,
             Duration = TimeSpan.FromMilliseconds(170)
         };
 
         fadeOut.Completed += (_, _) =>
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
-
-            ResetAnimationState();
+            SwitchToTargetTable(!_showTable1);
+            ListTransform.X = 0d;
+            ListTransform.Y = 0d;
             ListScaleTransform.ScaleX = 1.06d;
             ListScaleTransform.ScaleY = 1.06d;
             RowsItemsControl.Opacity = 0d;
@@ -346,8 +466,7 @@ public partial class RecordsDisplayWindow : Window
 
             fadeIn.Completed += (_, _) =>
             {
-                ResetAnimationState();
-                _isAnimating = false;
+                NormalizeAnimationState();
             };
 
             ListScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleIn);
@@ -362,11 +481,11 @@ public partial class RecordsDisplayWindow : Window
 
     private void PlayPopTransition()
     {
-        ResetAnimationState();
+        var state = CaptureCurrentVisualState();
 
         var scaleOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.ScaleX,
             To = 0.90d,
             Duration = TimeSpan.FromMilliseconds(140),
             EasingFunction = new BackEase { EasingMode = EasingMode.EaseIn, Amplitude = 0.35 }
@@ -374,17 +493,16 @@ public partial class RecordsDisplayWindow : Window
 
         var fadeOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.Opacity,
             To = 0d,
             Duration = TimeSpan.FromMilliseconds(140)
         };
 
         fadeOut.Completed += (_, _) =>
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
-
-            ResetAnimationState();
+            SwitchToTargetTable(!_showTable1);
+            ListTransform.X = 0d;
+            ListTransform.Y = 0d;
             ListScaleTransform.ScaleX = 0.86d;
             ListScaleTransform.ScaleY = 0.86d;
             RowsItemsControl.Opacity = 0d;
@@ -403,8 +521,7 @@ public partial class RecordsDisplayWindow : Window
 
             fadeIn.Completed += (_, _) =>
             {
-                ResetAnimationState();
-                _isAnimating = false;
+                NormalizeAnimationState();
             };
 
             ListScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleIn);
@@ -419,11 +536,11 @@ public partial class RecordsDisplayWindow : Window
 
     private void PlayLiftFadeTransition()
     {
-        ResetAnimationState();
+        var state = CaptureCurrentVisualState();
 
         var slideOut = new DoubleAnimation
         {
-            From = 0d,
+            From = state.Y,
             To = -14d,
             Duration = TimeSpan.FromMilliseconds(160),
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
@@ -431,18 +548,18 @@ public partial class RecordsDisplayWindow : Window
 
         var fadeOut = new DoubleAnimation
         {
-            From = 1d,
+            From = state.Opacity,
             To = 0d,
             Duration = TimeSpan.FromMilliseconds(160)
         };
 
         fadeOut.Completed += (_, _) =>
         {
-            _showTable1 = !_showTable1;
-            RefreshVisibleTable();
-
-            ResetAnimationState();
+            SwitchToTargetTable(!_showTable1);
+            ListTransform.X = 0d;
             ListTransform.Y = 18d;
+            ListScaleTransform.ScaleX = 1d;
+            ListScaleTransform.ScaleY = 1d;
             RowsItemsControl.Opacity = 0d;
 
             var slideIn = new DoubleAnimation
@@ -462,8 +579,7 @@ public partial class RecordsDisplayWindow : Window
 
             fadeIn.Completed += (_, _) =>
             {
-                ResetAnimationState();
-                _isAnimating = false;
+                NormalizeAnimationState();
             };
 
             ListTransform.BeginAnimation(TranslateTransform.YProperty, slideIn);
@@ -494,6 +610,30 @@ public partial class RecordsDisplayWindow : Window
 
         TrackNameTextBlock.Text = string.IsNullOrWhiteSpace(_trackName) ? string.Empty : $"Map: {_trackName}";
     }
+
+
+    private readonly record struct TransitionSnapshot(double Opacity, double X, double Y, double ScaleX, double ScaleY);
+
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_FRAMECHANGED = 0x0020;
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int WS_EX_NOACTIVATE = 0x08000000;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 }
 
 public sealed class RecordsDisplayRowView
