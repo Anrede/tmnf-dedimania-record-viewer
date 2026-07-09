@@ -1,9 +1,16 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Media;
 
 namespace TmnfDedimaniaScraper;
 
@@ -59,6 +66,7 @@ public partial class MainWindow : Window
         _pageReady = false;
         StatusText.Text = "Sayfa açılıyor...";
         Browser.CoreWebView2.Navigate(url);
+        await Task.CompletedTask;
     }
 
     private async void ScrapeButton_Click(object sender, RoutedEventArgs e)
@@ -72,17 +80,22 @@ public partial class MainWindow : Window
             }
 
             ScrapeButton.IsEnabled = false;
-            StatusText.Text = "Online records bölümü bekleniyor...";
+            ClearCurrentResults();
+            StatusText.Text = "Online records bölümü aranıyor (maks. 3 sn)...";
 
-            var extraction = await TryExtractAsync();
+            var extraction = await TryExtractAsync(TimeSpan.FromSeconds(3));
             _lastExtraction = extraction;
 
             JsonTextBox.Text = JsonSerializer.Serialize(extraction, JsonOptions);
-            FillGrid(extraction);
+
+            if (extraction.Success)
+                FillGrid(extraction);
+            else
+                ResetPreview();
 
             StatusText.Text = extraction.Success
                 ? $"{extraction.Records.Count} kayıt çekildi."
-                : $"Hata: {extraction.Message}";
+                : $"Sonuç yok: {extraction.Message}";
         }
         catch (Exception ex)
         {
@@ -95,9 +108,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<ExtractionResult> TryExtractAsync()
+    private async Task<ExtractionResult> TryExtractAsync(TimeSpan timeout)
     {
-        for (int i = 0; i < 20; i++)
+        var stopwatch = Stopwatch.StartNew();
+
+        while (stopwatch.Elapsed < timeout)
         {
             if (_pageReady)
             {
@@ -106,13 +121,13 @@ public partial class MainWindow : Window
                     return result;
             }
 
-            await Task.Delay(1000);
+            await Task.Delay(500);
         }
 
         return new ExtractionResult
         {
             Success = false,
-            Message = "Online records tablosu bulunamadı. Sayfa yapısı değişmiş olabilir."
+            Message = "3 saniye içinde online records tablosu bulunamadı. Track için online record olmayabilir veya sayfa yapısı değişmiş olabilir."
         };
     }
 
@@ -121,6 +136,16 @@ public partial class MainWindow : Window
         string rawJson = await Browser.ExecuteScriptAsync(JsExtractionScript);
         return JsonSerializer.Deserialize<ExtractionResult>(rawJson, JsonOptions)
                ?? new ExtractionResult { Success = false, Message = "JavaScript sonucu çözümlenemedi." };
+    }
+
+    private void ClearCurrentResults()
+    {
+        _lastExtraction = null;
+        _rows.Clear();
+        _segments.Clear();
+        JsonTextBox.Clear();
+        RecordsGrid.SelectedItem = null;
+        ResetPreview();
     }
 
     private void FillGrid(ExtractionResult extraction)
@@ -143,20 +168,137 @@ public partial class MainWindow : Window
 
         if (_rows.Count > 0)
             RecordsGrid.SelectedIndex = 0;
+        else
+            ResetPreview();
     }
 
-    private void RecordsGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private void RecordsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _segments.Clear();
 
         if (RecordsGrid.SelectedItem is not OnlineRecordRowView selected || selected.Source is null)
+        {
+            ResetPreview();
             return;
+        }
 
         AddSegments("#", selected.Source.Rank);
         AddSegments("Time", selected.Source.Time);
         AddSegments("Mode", selected.Source.Mode);
         AddSegments("By", selected.Source.By);
         AddSegments("Server", selected.Source.Server);
+
+        RenderCellPreview(PreviewRankText, selected.Source.Rank);
+        RenderCellPreview(PreviewTimeText, selected.Source.Time);
+        RenderCellPreview(PreviewModeText, selected.Source.Mode);
+        RenderCellPreview(PreviewByText, selected.Source.By);
+        RenderCellPreview(PreviewServerText, selected.Source.Server);
+    }
+
+    private void ResetPreview()
+    {
+        PreviewRankText.Inlines.Clear();
+        PreviewTimeText.Inlines.Clear();
+        PreviewModeText.Inlines.Clear();
+        PreviewByText.Inlines.Clear();
+        PreviewServerText.Inlines.Clear();
+
+        PreviewRankText.Text = "-";
+        PreviewTimeText.Text = "-";
+        PreviewModeText.Text = "-";
+        PreviewByText.Text = "-";
+        PreviewServerText.Text = "-";
+    }
+
+    private void RenderCellPreview(TextBlock target, CellData cell)
+    {
+        target.Text = string.Empty;
+        target.Inlines.Clear();
+
+        if (cell.Segments.Count == 0)
+        {
+            target.Text = string.IsNullOrWhiteSpace(cell.Text) ? "-" : cell.Text;
+            target.Foreground = Brushes.White;
+            return;
+        }
+
+        bool first = true;
+        foreach (var segment in cell.Segments)
+        {
+            if (!first)
+                target.Inlines.Add(new Run(" "));
+
+            first = false;
+
+            var run = new Run(segment.Text)
+            {
+                Foreground = CssColorHelper.ToBrush(segment.Color, Brushes.White),
+                FontWeight = ToFontWeight(segment.FontWeight),
+                FontStyle = ToFontStyle(segment.FontStyle),
+                FontFamily = TryCreateFontFamily(segment.FontFamily) ?? target.FontFamily,
+                FontSize = TryParseFontSize(segment.FontSize) ?? target.FontSize
+            };
+
+            if (!string.IsNullOrWhiteSpace(segment.TextDecoration) &&
+                segment.TextDecoration.Contains("underline", StringComparison.OrdinalIgnoreCase))
+            {
+                run.TextDecorations = TextDecorations.Underline;
+            }
+
+            target.Inlines.Add(run);
+        }
+    }
+
+    private static FontWeight ToFontWeight(string? cssValue)
+    {
+        if (int.TryParse(cssValue, out int weight))
+        {
+            if (weight >= 700) return FontWeights.Bold;
+            if (weight >= 600) return FontWeights.SemiBold;
+            if (weight <= 300) return FontWeights.Light;
+        }
+
+        return cssValue?.Contains("bold", StringComparison.OrdinalIgnoreCase) == true
+            ? FontWeights.Bold
+            : FontWeights.Normal;
+    }
+
+    private static FontStyle ToFontStyle(string? cssValue)
+    {
+        return cssValue?.Contains("italic", StringComparison.OrdinalIgnoreCase) == true
+            ? FontStyles.Italic
+            : FontStyles.Normal;
+    }
+
+    private static FontFamily? TryCreateFontFamily(string? cssValue)
+    {
+        if (string.IsNullOrWhiteSpace(cssValue))
+            return null;
+
+        try
+        {
+            var first = cssValue.Split(',')[0].Trim().Trim('"', '\'');
+            return string.IsNullOrWhiteSpace(first) ? null : new FontFamily(first);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static double? TryParseFontSize(string? cssValue)
+    {
+        if (string.IsNullOrWhiteSpace(cssValue))
+            return null;
+
+        var match = Regex.Match(cssValue, @"[\d.]+");
+        if (!match.Success)
+            return null;
+
+        if (!double.TryParse(match.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var px))
+            return null;
+
+        return px;
     }
 
     private void AddSegments(string cellName, CellData cell)
@@ -208,7 +350,6 @@ public partial class MainWindow : Window
     const expectedHeaders = ['#', 'Time', 'Mode', 'By', 'Server'];
 
     const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim();
-
     const isRank = (value) => /^\d+(st|nd|rd|th)$/i.test(value) || /^\d+$/.test(value);
 
     function getStyle(element) {
@@ -436,4 +577,74 @@ public sealed class SegmentRowView
     public string FontStyle { get; set; } = string.Empty;
     public string TextDecoration { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
+}
+
+public sealed class CssColorToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return CssColorHelper.ToBrush(value?.ToString(), Brushes.Transparent);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotSupportedException();
+    }
+}
+
+public static class CssColorHelper
+{
+    private static readonly Regex RgbRegex = new(@"rgba?\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public static Brush ToBrush(string? cssColor, Brush fallback)
+    {
+        if (TryParse(cssColor, out var color))
+            return new SolidColorBrush(color);
+
+        return fallback;
+    }
+
+    public static bool TryParse(string? cssColor, out Color color)
+    {
+        color = Colors.Transparent;
+
+        if (string.IsNullOrWhiteSpace(cssColor))
+            return false;
+
+        cssColor = cssColor.Trim();
+
+        var rgbMatch = RgbRegex.Match(cssColor);
+        if (rgbMatch.Success)
+        {
+            var parts = rgbMatch.Groups[1].Value.Split(',').Select(p => p.Trim()).ToArray();
+            if (parts.Length >= 3 &&
+                byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out byte r) &&
+                byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out byte g) &&
+                byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out byte b))
+            {
+                byte a = 255;
+                if (parts.Length >= 4 && double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double alpha))
+                    a = (byte)Math.Clamp(alpha * 255.0, 0, 255);
+
+                color = Color.FromArgb(a, r, g, b);
+                return true;
+            }
+        }
+
+        try
+        {
+            var converted = ColorConverter.ConvertFromString(cssColor);
+            if (converted is Color parsed)
+            {
+                color = parsed;
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
+    }
 }
