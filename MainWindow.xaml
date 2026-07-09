@@ -15,6 +15,10 @@
 
     <Window.Resources>
         <local:CssColorToBrushConverter x:Key="CssColorToBrushConverter" />
+        <local:CssFontWeightConverter x:Key="CssFontWeightConverter" />
+        <local:CssFontStyleConverter x:Key="CssFontStyleConverter" />
+        <local:CssFontSizeConverter x:Key="CssFontSizeConverter" />
+        <local:CssFontFamilyConverter x:Key="CssFontFamilyConverter" />
 
         <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#111827" />
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#1F2937" />
@@ -104,6 +108,23 @@
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
 
+        <Style x:Key="LayoutGridSplitterStyle" TargetType="GridSplitter">
+            <Setter Property="Background" Value="#1F2937"/>
+            <Setter Property="ShowsPreview" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="#334155" BorderThickness="1" CornerRadius="3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2563EB"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="{StaticResource PanelAltBackgroundBrush}" />
             <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
@@ -117,11 +138,13 @@
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="CanUserDeleteRows" Value="False" />
             <Setter Property="CanUserResizeRows" Value="False" />
+            <Setter Property="CanUserResizeColumns" Value="True" />
+            <Setter Property="CanUserReorderColumns" Value="True" />
+            <Setter Property="CanUserSortColumns" Value="False"/>
             <Setter Property="RowHeaderWidth" Value="0" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="SelectionMode" Value="Single"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
-            <Setter Property="CanUserSortColumns" Value="False"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
         </Style>
@@ -158,8 +181,7 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="2.35*"/>
-            <RowDefinition Height="1.55*"/>
+            <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -188,88 +210,21 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <Button Grid.Column="0"
-                            x:Name="BackButton"
-                            Style="{StaticResource ChromeNavButtonStyle}"
-                            Margin="0,0,8,0"
-                            Click="BackButton_Click"
-                            ToolTip="Önceki sayfa"
-                            Content="←"/>
+                    <Button Grid.Column="0" x:Name="BackButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,8,0" Click="BackButton_Click" ToolTip="Önceki sayfa" Content="←"/>
+                    <Button Grid.Column="1" x:Name="ForwardButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,8,0" Click="ForwardButton_Click" ToolTip="Sonraki sayfa" Content="→"/>
+                    <Button Grid.Column="2" x:Name="ReloadButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,10,0" Click="ReloadButton_Click" ToolTip="Yenile" Content="↻"/>
 
-                    <Button Grid.Column="1"
-                            x:Name="ForwardButton"
-                            Style="{StaticResource ChromeNavButtonStyle}"
-                            Margin="0,0,8,0"
-                            Click="ForwardButton_Click"
-                            ToolTip="Sonraki sayfa"
-                            Content="→"/>
-
-                    <Button Grid.Column="2"
-                            x:Name="ReloadButton"
-                            Style="{StaticResource ChromeNavButtonStyle}"
-                            Margin="0,0,10,0"
-                            Click="ReloadButton_Click"
-                            ToolTip="Yenile"
-                            Content="↻"/>
-
-                    <TextBox x:Name="UrlTextBox"
-                             Grid.Column="3"
-                             Margin="0,0,10,0"
-                             Padding="12,8"
-                             FontSize="14"
-                             KeyDown="UrlTextBox_KeyDown"
-                             Text="https://tmnf.exchange/trackshow/9684537"/>
-
-                    <Button Grid.Column="4"
-                            x:Name="LoadButton"
-                            Width="110"
-                            Height="38"
-                            Margin="0,0,8,0"
-                            Click="LoadButton_Click"
-                            Content="Siteyi Aç"/>
-
-                    <Button Grid.Column="5"
-                            x:Name="ScrapeButton"
-                            Width="120"
-                            Height="38"
-                            Margin="0,0,8,0"
-                            Click="ScrapeButton_Click"
-                            Content="Veriyi Çek"/>
-
-                    <Button Grid.Column="6"
-                            x:Name="AddBookmarkButton"
-                            Width="90"
-                            Height="38"
-                            Margin="0,0,8,0"
-                            Click="AddBookmarkButton_Click"
-                            Content="☆ Kaydet"/>
-
-                    <Button Grid.Column="7"
-                            x:Name="RemoveBookmarkButton"
-                            Width="74"
-                            Height="38"
-                            Click="RemoveBookmarkButton_Click"
-                            Content="✕ Sil"/>
+                    <TextBox x:Name="UrlTextBox" Grid.Column="3" Margin="0,0,10,0" Padding="12,8" FontSize="14" KeyDown="UrlTextBox_KeyDown" Text="https://tmnf.exchange/trackshow/9684537"/>
+                    <Button Grid.Column="4" x:Name="LoadButton" Width="110" Height="38" Margin="0,0,8,0" Click="LoadButton_Click" Content="Siteyi Aç"/>
+                    <Button Grid.Column="5" x:Name="ScrapeButton" Width="120" Height="38" Margin="0,0,8,0" Click="ScrapeButton_Click" Content="Veriyi Çek"/>
+                    <Button Grid.Column="6" x:Name="AddBookmarkButton" Width="90" Height="38" Margin="0,0,8,0" Click="AddBookmarkButton_Click" Content="☆ Kaydet"/>
+                    <Button Grid.Column="7" x:Name="RemoveBookmarkButton" Width="74" Height="38" Click="RemoveBookmarkButton_Click" Content="✕ Sil"/>
                 </Grid>
 
-                <Border Grid.Row="1"
-                        Margin="0,10,0,0"
-                        Background="#111827"
-                        BorderBrush="#243244"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="10,8">
+                <Border Grid.Row="1" Margin="0,10,0,0" Background="#111827" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10,8">
                     <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left"
-                                   Margin="0,0,12,0"
-                                   VerticalAlignment="Center"
-                                   FontWeight="SemiBold"
-                                   Foreground="#93C5FD"
-                                   Text="Yer İmleri"/>
-
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                      VerticalScrollBarVisibility="Disabled"
-                                      CanContentScroll="True">
+                        <TextBlock DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#93C5FD" Text="Yer İmleri"/>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="True">
                             <ItemsControl x:Name="BookmarksItemsControl">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -278,11 +233,8 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Button Style="{StaticResource BookmarkChipStyle}"
-                                                Click="BookmarkButton_Click"
-                                                ToolTip="{Binding Url}">
-                                            <TextBlock Text="{Binding Title}"
-                                                       TextTrimming="CharacterEllipsis"/>
+                                        <Button Style="{StaticResource BookmarkChipStyle}" Click="BookmarkButton_Click" ToolTip="{Binding Url}">
+                                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
                                         </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -295,257 +247,111 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.3*"/>
-                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition x:Name="LeftMainColumn" Width="1.3*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition x:Name="RightMainColumn" Width="1*"/>
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="LeftBrowserRow" Height="2.7*"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition x:Name="LeftSegmentsRow" Height="2.2*"/>
+            </Grid.RowDefinitions>
 
-            <Grid Grid.Column="0" Margin="0,0,10,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="132"/>
-                </Grid.RowDefinitions>
-
-                <Border Grid.Row="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,0,10">
-                    <Grid>
-                        <wv2:WebView2 x:Name="Browser" Margin="1"/>
-                    </Grid>
-                </Border>
-
-                <Border Grid.Row="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-                    <Grid Margin="12">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-
-                        <Border Grid.Row="1" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="12,10">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="140"/>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="2*"/>
-                                    <ColumnDefinition Width="2*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="#" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Time" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Mode" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Row="0" Grid.Column="3" Text="By" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Row="0" Grid.Column="4" Text="Server" Foreground="#93C5FD" Margin="0,0,0,8" FontWeight="SemiBold"/>
-
-                                <TextBlock Grid.Row="1" Grid.Column="0" x:Name="PreviewRankText" FontSize="15" FontWeight="Bold" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewTimeText" FontSize="15" FontWeight="SemiBold" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="2" x:Name="PreviewModeText" FontSize="15" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="3" x:Name="PreviewByText" FontSize="15" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="4" x:Name="PreviewServerText" FontSize="15" Text="-" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-                    </Grid>
-                </Border>
-            </Grid>
-
-            <Border Grid.Column="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-                <Grid Margin="12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="1.1*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="1*"/>
-                    </Grid.RowDefinitions>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="Çekilen kayıtlar" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="TrackNameHeaderText" Text="  •  -" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}"/>
-                    </StackPanel>
-
-                    <DataGrid Grid.Row="1"
-                              x:Name="RecordsGrid"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              SelectionChanged="RecordsGrid_SelectionChanged"
-                             >
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
-                            <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
-                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="90"/>
-                            <DataGridTextColumn Header="By" Binding="{Binding By}" Width="260"/>
-                            <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="260"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <TextBlock Grid.Row="2" Text="Yeni tablolar (Rank / Time / By)" FontSize="15" FontWeight="SemiBold" Margin="0,10,0,8"/>
-
-                    <Grid Grid.Row="3">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="10"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Border Grid.Column="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="Tablo 1" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1"
-                                            x:Name="Table1MenuButton"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Width="30"
-                                            Height="26"
-                                            Padding="0"
-                                            Click="Table1MenuButton_Click"
-                                            Content="▾">
-                                        <Button.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Export (.txt)" Click="ExportTable1MenuItem_Click"/>
-                                                <MenuItem Header="Import (.txt)" Click="ImportTable1MenuItem_Click"/>
-                                            </ContextMenu>
-                                        </Button.ContextMenu>
-                                    </Button>
-                                </Grid>
-
-                                <Grid Grid.Row="1" Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
-                                    <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable1ItemButton_Click" Content="Ekle"/>
-                                    <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Seçileni Sil"/>
-                                </Grid>
-
-                                <DataGrid Grid.Row="2"
-                                          x:Name="Table1Grid"
-                                          AutoGenerateColumns="False"
-                                          IsReadOnly="True"
-                                          SelectionChanged="Table1Grid_SelectionChanged"
-                                         >
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
-                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
-                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="220"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </Grid>
-                        </Border>
-
-                        <Border Grid.Column="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="Tablo 2" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1"
-                                            x:Name="Table2MenuButton"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Width="30"
-                                            Height="26"
-                                            Padding="0"
-                                            Click="Table2MenuButton_Click"
-                                            Content="▾">
-                                        <Button.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Export (.txt)" Click="ExportTable2MenuItem_Click"/>
-                                                <MenuItem Header="Import (.txt)" Click="ImportTable2MenuItem_Click"/>
-                                            </ContextMenu>
-                                        </Button.ContextMenu>
-                                    </Button>
-                                </Grid>
-
-                                <Grid Grid.Row="1" Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
-                                    <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable2ItemButton_Click" Content="Ekle"/>
-                                    <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Seçileni Sil"/>
-                                </Grid>
-
-                                <DataGrid Grid.Row="2"
-                                          x:Name="Table2Grid"
-                                          AutoGenerateColumns="False"
-                                          IsReadOnly="True"
-                                          SelectionChanged="Table2Grid_SelectionChanged"
-                                         >
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
-                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
-                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="220"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </Grid>
-                        </Border>
-                    </Grid>
+            <Border Grid.Row="0" Grid.Column="0"
+                    Margin="0"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                <Grid>
+                    <wv2:WebView2 x:Name="Browser" Margin="1"/>
                 </Grid>
             </Border>
-        </Grid>
 
-        <Grid Grid.Row="2" Margin="0,10,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.3*"/>
-                <ColumnDefinition Width="1*"/>
-            </Grid.ColumnDefinitions>
+            <GridSplitter Grid.Row="1" Grid.Column="0"
+                          Height="8"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext"
+                          DragCompleted="LayoutSplitter_DragCompleted"
+                          Style="{StaticResource LayoutGridSplitterStyle}"/>
 
-            <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
+            <Border Grid.Row="2" Grid.Column="0"
+                    Margin="0"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="10">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="Segment detayları" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <DataGrid Grid.Row="1"
-                              x:Name="SegmentsGrid"
-                              AutoGenerateColumns="False"
-                              CanUserSortColumns="False"
-                              SelectionChanged="SegmentsGrid_SelectionChanged"
-                             >
+
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="Segment detayları" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                        <Grid Grid.Column="2" HorizontalAlignment="Right">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="86"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="74"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="42"/>
+                                <ColumnDefinition Width="4"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="42"/>
+                                <ColumnDefinition Width="4"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="42"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="88"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="Style" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox Grid.Column="1" x:Name="SegmentStyleComboBox" Height="28" SelectionChanged="SegmentStyleComboBox_SelectionChanged">
+                                <ComboBoxItem Content="normal"/>
+                                <ComboBoxItem Content="italic"/>
+                            </ComboBox>
+
+                            <TextBlock Grid.Column="3" Text="Renk" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Border Grid.Column="4" x:Name="SelectedColorPreviewBorder" Height="28" Cursor="Hand" CornerRadius="6" BorderBrush="#475569" BorderThickness="1" Background="Transparent" ToolTip="Tıkla, renk skalası açılsın" MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
+
+                            <TextBlock Grid.Column="6" Text="R" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBox Grid.Column="7" x:Name="RedTextBox" Height="28"/>
+                            <TextBlock Grid.Column="9" Text="G" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBox Grid.Column="10" x:Name="GreenTextBox" Height="28"/>
+                            <TextBlock Grid.Column="12" Text="B" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBox Grid.Column="13" x:Name="BlueTextBox" Height="28"/>
+                            <Button Grid.Column="15" x:Name="ApplyRgbButton" Width="88" Height="28" Click="ApplyRgbButton_Click" Content="RGB Uygula"/>
+                        </Grid>
+                    </Grid>
+
+                    <DataGrid Grid.Row="1" x:Name="SegmentsGrid" AutoGenerateColumns="False" CanUserSortColumns="False" SelectionChanged="SegmentsGrid_SelectionChanged">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="85" IsReadOnly="True"/>
-                            <DataGridTemplateColumn Header="Renk" Width="55">
+                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="72" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="Renk" Width="50">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Border Width="22" Height="22"
-                                                CornerRadius="5"
-                                                BorderBrush="#64748B"
-                                                BorderThickness="1"
-                                                Background="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"/>
+                                        <Border Width="20" Height="20" CornerRadius="5" BorderBrush="#64748B" BorderThickness="1" Background="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Color" Binding="{Binding Color, UpdateSourceTrigger=PropertyChanged}" Width="145"/>
-                            <DataGridTextColumn Header="BgColor" Binding="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" Width="145"/>
-                            <DataGridTextColumn Header="Text" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="260"/>
-                            <DataGridTextColumn Header="Weight" Binding="{Binding FontWeight, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
-                            <DataGridTemplateColumn Header="Style" Width="100">
+                            <DataGridTextColumn Header="Color" Binding="{Binding Color, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="BgColor" Binding="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="Text" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="220"/>
+                            <DataGridTextColumn Header="Weight" Binding="{Binding FontWeight, UpdateSourceTrigger=PropertyChanged}" Width="72"/>
+                            <DataGridTemplateColumn Header="Style" Width="90">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding FontStyle}"/>
@@ -553,172 +359,293 @@
                                 </DataGridTemplateColumn.CellTemplate>
                                 <DataGridTemplateColumn.CellEditingTemplate>
                                     <DataTemplate>
-                                        <ComboBox SelectedValuePath="Content"
-                                                  SelectedValue="{Binding FontStyle, UpdateSourceTrigger=PropertyChanged}">
+                                        <ComboBox SelectedValuePath="Content" SelectedValue="{Binding FontStyle, UpdateSourceTrigger=PropertyChanged}">
                                             <ComboBoxItem Content="normal"/>
                                             <ComboBoxItem Content="italic"/>
                                         </ComboBox>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Decoration" Binding="{Binding TextDecoration, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
-                            <DataGridTextColumn Header="FontSize" Binding="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
-                            <DataGridTextColumn Header="FontFamily" Binding="{Binding FontFamily, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
-                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
-                            <DataGridTextColumn Header="Tag" Binding="{Binding Tag, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
+                            <DataGridTextColumn Header="Decoration" Binding="{Binding TextDecoration, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                            <DataGridTextColumn Header="FontSize" Binding="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" Width="82"/>
+                            <DataGridTextColumn Header="FontFamily" Binding="{Binding FontFamily, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="Tag" Binding="{Binding Tag, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
             </Border>
 
-            <Grid Grid.Column="1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.35*"/>
-                    <ColumnDefinition Width="10"/>
-                    <ColumnDefinition Width="0.65*"/>
-                </Grid.ColumnDefinitions>
+            <GridSplitter Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
+                          Width="8"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          DragCompleted="LayoutSplitter_DragCompleted"
+                          Style="{StaticResource LayoutGridSplitterStyle}"/>
 
-                <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-                    <Grid Margin="10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+            <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="2"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="RightRecordsRow" Height="2.2*"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition x:Name="RightTablesRow" Height="1.2*"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition x:Name="RightPreviewRow" Height="170"/>
+                    </Grid.RowDefinitions>
 
-                        <TextBlock Text="Seçili segment düzenleyici" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <TextBlock x:Name="SelectedSegmentInfoText"
-                                   Grid.Row="0"
-                                   Text="Bir segment seç"
-                                   Visibility="Collapsed"
-                                   Height="0"
-                                   Margin="0"/>
-
-                        <Grid Grid.Row="1" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Style" Margin="0,0,0,4"/>
-                                <ComboBox x:Name="SegmentStyleComboBox"
-                                          Height="30"
-                                          SelectionChanged="SegmentStyleComboBox_SelectionChanged">
-                                    <ComboBoxItem Content="normal"/>
-                                    <ComboBoxItem Content="italic"/>
-                                </ComboBox>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Renk önizleme" Margin="0,0,0,4"/>
-                                <Border x:Name="SelectedColorPreviewBorder"
-                                        Height="30"
-                                        Cursor="Hand"
-                                        CornerRadius="6"
-                                        BorderBrush="#475569"
-                                        BorderThickness="1"
-                                        Background="Transparent"
-                                        ToolTip="Tıkla, renk skalası açılsın"
-                                        MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <Grid Grid.Row="2">
+                    <Border Grid.Row="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
+                        <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <Border Grid.Row="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <TextBlock Text="RGB düzenleme" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD"/>
-                                    <Grid Grid.Row="1">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                            <TextBlock Text="R" Margin="0,0,0,4"/>
-                                            <TextBox x:Name="RedTextBox"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                            <TextBlock Text="G" Margin="0,0,0,4"/>
-                                            <TextBox x:Name="GreenTextBox"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="0,0,8,0">
-                                            <TextBlock Text="B" Margin="0,0,0,4"/>
-                                            <TextBox x:Name="BlueTextBox"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
-                                            <Button x:Name="ApplyRgbButton"
-                                                    Width="100"
-                                                    Height="34"
-                                                    Click="ApplyRgbButton_Click"
-                                                    Content="RGB Uygula"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Grid>
-                            </Border>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+                                <Button x:Name="RecordsMenuButton" DockPanel.Dock="Left" Style="{StaticResource SecondaryButtonStyle}" Width="30" Height="26" Padding="0" Margin="0,0,8,0" Click="RecordsMenuButton_Click" Content="▾">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Export (.txt)" Click="ExportRecordsMenuItem_Click"/>
+                                            <MenuItem Header="Import (.txt)" Click="ImportRecordsMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <TextBlock DockPanel.Dock="Left" Text="Çekilen kayıtlar" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TrackNameHeaderText" DockPanel.Dock="Left" Text="  •  -" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}" VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="1" x:Name="RecordsGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="RecordsGrid_SelectionChanged">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                    <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                    <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="90"/>
+                                    <DataGridTextColumn Header="By" Binding="{Binding By}" Width="260"/>
+                                    <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="260"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <GridSplitter Grid.Row="1"
+                                  Height="8"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  ResizeDirection="Rows"
+                                  ResizeBehavior="PreviousAndNext"
+                                  DragCompleted="LayoutSplitter_DragCompleted"
+                                  Style="{StaticResource LayoutGridSplitterStyle}"/>
+
+                    <Border Grid.Row="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Text="Yeni tablolar (Rank / Time / By)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
                             <Grid Grid.Row="1">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="Renk tablosu" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD"/>
-                                <DataGrid Grid.Row="1"
-                                          x:Name="ColorPaletteGrid"
-                                          AutoGenerateColumns="False"
-                                          IsReadOnly="True"
-                                          SelectionChanged="ColorPaletteGrid_SelectionChanged">
-                                    <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="" Width="40">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <Border Width="20" Height="20" CornerRadius="4" BorderBrush="#475569" BorderThickness="1"
-                                                            Background="{Binding CssColor, Converter={StaticResource CssColorToBrushConverter}}"/>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Ad" Binding="{Binding Name}" Width="*"/>
-                                        <DataGridTextColumn Header="RGB" Binding="{Binding RgbText}" Width="100"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button x:Name="Table1MenuButton" Style="{StaticResource SecondaryButtonStyle}" Width="30" Height="26" Padding="0" Margin="0,0,8,0" Click="Table1MenuButton_Click" Content="▾">
+                                                <Button.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="Export (.txt)" Click="ExportTable1MenuItem_Click"/>
+                                                        <MenuItem Header="Import (.txt)" Click="ImportTable1MenuItem_Click"/>
+                                                    </ContextMenu>
+                                                </Button.ContextMenu>
+                                            </Button>
+                                            <TextBlock Text="Tablo 1" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
+                                            <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable1ItemButton_Click" Content="Ekle"/>
+                                            <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Seçileni Sil"/>
+                                        </Grid>
+
+                                        <DataGrid Grid.Row="2" x:Name="Table1Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table1Grid_SelectionChanged">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                                <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                                <DataGridTextColumn Header="By" Binding="{Binding By}" Width="220"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </Grid>
+                                </Border>
+
+                                <Border Grid.Column="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button x:Name="Table2MenuButton" Style="{StaticResource SecondaryButtonStyle}" Width="30" Height="26" Padding="0" Margin="0,0,8,0" Click="Table2MenuButton_Click" Content="▾">
+                                                <Button.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="Export (.txt)" Click="ExportTable2MenuItem_Click"/>
+                                                        <MenuItem Header="Import (.txt)" Click="ImportTable2MenuItem_Click"/>
+                                                    </ContextMenu>
+                                                </Button.ContextMenu>
+                                            </Button>
+                                            <TextBlock Text="Tablo 2" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
+                                            <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable2ItemButton_Click" Content="Ekle"/>
+                                            <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Seçileni Sil"/>
+                                        </Grid>
+
+                                        <DataGrid Grid.Row="2" x:Name="Table2Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table2Grid_SelectionChanged">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                                <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                                <DataGridTextColumn Header="By" Binding="{Binding By}" Width="220"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </Grid>
+                                </Border>
                             </Grid>
                         </Grid>
-                    </Grid>
-                </Border>
+                    </Border>
 
-                <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-                    <Grid Margin="10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+                    <GridSplitter Grid.Row="3"
+                                  Height="8"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  ResizeDirection="Rows"
+                                  ResizeBehavior="PreviousAndNext"
+                                  DragCompleted="LayoutSplitter_DragCompleted"
+                                  Style="{StaticResource LayoutGridSplitterStyle}"/>
 
-                        <TextBlock Text="Ham JSON" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <TextBox Grid.Row="1"
-                                 x:Name="JsonTextBox"
-                                 FontFamily="Consolas"
-                                 FontSize="13"
-                                 TextWrapping="NoWrap"
-                                 AcceptsReturn="True"
-                                 AcceptsTab="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"/>
-                    </Grid>
-                </Border>
-            </Grid>
+                    <Border Grid.Row="4" Margin="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <DataGrid Grid.Row="1" x:Name="PreviewGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" SelectionMode="Single" SelectionUnit="FullRow">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="#" Width="90">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding RankSegments}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}"
+                                                                       Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}"
+                                                                       FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}"
+                                                                       FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}"
+                                                                       FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}"
+                                                                       FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}"
+                                                                       VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Time" Width="120">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding TimeSegments}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}" FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}" FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}" FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Mode" Width="90">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding ModeSegments}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}" FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}" FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}" FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="By" Width="220">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding BySegments}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}" FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}" FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}" FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Server" Width="240">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding ServerSegments}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}" FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}" FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}" FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
         </Grid>
-
-        <StatusBar Grid.Row="3" Background="#0B1220" Foreground="{StaticResource ForegroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" Margin="0,12,0,0">
+        <StatusBar Grid.Row="2" Background="#0B1220" Foreground="{StaticResource ForegroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" Margin="0,12,0,0">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Hazır"/>
             </StatusBarItem>

@@ -13,6 +13,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -29,8 +30,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<RankTimeByRowView> _table1Rows = new();
     private readonly ObservableCollection<RankTimeByRowView> _table2Rows = new();
     private readonly ObservableCollection<SegmentRowView> _segments = new();
+    private readonly ObservableCollection<PreviewRecordRowView> _previewRows = new();
     private readonly ObservableCollection<BookmarkItem> _bookmarks = new();
-    private readonly ObservableCollection<ColorPaletteItem> _colorPalette = new();
 
     private ExtractionResult? _lastExtraction;
     private OnlineRecord? _currentSelectedRecord;
@@ -42,7 +43,6 @@ public partial class MainWindow : Window
     private bool _isSynchronizingSelections;
     private bool _suppressSegmentChangeHandling;
     private bool _suppressStyleSelectionEvent;
-    private bool _suppressPaletteApply;
     private Color? _pendingEditorColor;
     private string _currentTrackName = string.Empty;
 
@@ -70,10 +70,9 @@ public partial class MainWindow : Window
         Table1Grid.ItemsSource = _table1Rows;
         Table2Grid.ItemsSource = _table2Rows;
         SegmentsGrid.ItemsSource = _segments;
+        PreviewGrid.ItemsSource = _previewRows;
+        ResetPreview();
         BookmarksItemsControl.ItemsSource = _bookmarks;
-        ColorPaletteGrid.ItemsSource = _colorPalette;
-
-        InitializeColorPalette();
         LoadBookmarks();
         _loadedAppState = LoadAppState();
         ApplyLoadedState(_loadedAppState);
@@ -144,7 +143,7 @@ public partial class MainWindow : Window
         yield return Table1Grid;
         yield return Table2Grid;
         yield return SegmentsGrid;
-        yield return ColorPaletteGrid;
+        yield return PreviewGrid;
     }
 
     private void StatefulGrid_ColumnStateChanged(object? sender, EventArgs e)
@@ -183,6 +182,7 @@ public partial class MainWindow : Window
         try
         {
             ApplyWindowState(state);
+            ApplyLayoutLengths(state.LayoutLengths);
 
             if (!string.IsNullOrWhiteSpace(state.LastUrl))
                 UrlTextBox.Text = NormalizeUrl(state.LastUrl);
@@ -218,7 +218,7 @@ public partial class MainWindow : Window
         _isRestoringState = true;
         try
         {
-            ApplyColumnWidths(state.ColumnWidths);
+            ApplyColumnStates(state.ColumnWidths);
             RestoreSelections(state.Selection);
         }
         finally
@@ -289,7 +289,6 @@ public partial class MainWindow : Window
         RenumberCustomTable(_table2Rows);
 
         UpdateTrackNameHeader(state.TrackName);
-        RefreshJsonText();
 
         if (_rows.Count == 0 && _table1Rows.Count == 0 && _table2Rows.Count == 0)
             ResetPreview();
@@ -330,7 +329,7 @@ public partial class MainWindow : Window
         return index >= 0 && index < count ? index : -1;
     }
 
-    private void ApplyColumnWidths(List<GridColumnState> columnStates)
+    private void ApplyColumnStates(List<GridColumnState> columnStates)
     {
         if (columnStates.Count == 0)
             return;
@@ -342,13 +341,31 @@ public partial class MainWindow : Window
             if (gridStates.Count == 0)
                 continue;
 
-            for (int i = 0; i < grid.Columns.Count; i++)
+            foreach (var column in grid.Columns)
             {
-                var saved = gridStates.FirstOrDefault(c => c.ColumnIndex == i);
-                if (saved is null || saved.Width <= 0)
+                string header = column.Header?.ToString() ?? string.Empty;
+                var saved = gridStates.FirstOrDefault(c => string.Equals(c.Header, header, StringComparison.Ordinal));
+                if (saved is null)
                     continue;
 
-                grid.Columns[i].Width = new DataGridLength(saved.Width);
+                if (saved.Width > 0)
+                    column.Width = new DataGridLength(saved.Width);
+            }
+
+            foreach (var saved in gridStates.Where(c => c.DisplayIndex >= 0).OrderBy(c => c.DisplayIndex))
+            {
+                var column = grid.Columns.FirstOrDefault(c => string.Equals(c.Header?.ToString() ?? string.Empty, saved.Header, StringComparison.Ordinal));
+                if (column is null)
+                    continue;
+
+                try
+                {
+                    column.DisplayIndex = Math.Clamp(saved.DisplayIndex, 0, grid.Columns.Count - 1);
+                }
+                catch
+                {
+                    // Ignore invalid restore orders from older state files.
+                }
             }
         }
     }
@@ -390,7 +407,8 @@ public partial class MainWindow : Window
                     Table2SelectedIndex = Table2Grid.SelectedIndex,
                     SegmentsSelectedIndex = SegmentsGrid.SelectedIndex
                 },
-                ColumnWidths = CaptureColumnWidths()
+                ColumnWidths = CaptureColumnWidths(),
+                LayoutLengths = CaptureLayoutLengths()
             };
 
             File.WriteAllText(AppStateFilePath, JsonSerializer.Serialize(state, JsonOptions));
@@ -415,6 +433,7 @@ public partial class MainWindow : Window
                 {
                     GridKey = gridKey,
                     ColumnIndex = i,
+                    DisplayIndex = grid.Columns[i].DisplayIndex,
                     Header = grid.Columns[i].Header?.ToString() ?? string.Empty,
                     Width = grid.Columns[i].ActualWidth > 0 ? grid.Columns[i].ActualWidth : grid.Columns[i].Width.DisplayValue
                 });
@@ -429,38 +448,93 @@ public partial class MainWindow : Window
         return grid.Name ?? string.Empty;
     }
 
-    private void InitializeColorPalette()
+    private void LayoutSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
     {
-        _colorPalette.Clear();
-
-        AddPalette("White", 255, 255, 255);
-        AddPalette("Gold", 255, 215, 0);
-        AddPalette("Orange", 255, 165, 0);
-        AddPalette("Tomato", 255, 99, 71);
-        AddPalette("Crimson", 220, 20, 60);
-        AddPalette("Hot Pink", 255, 105, 180);
-        AddPalette("Purple", 147, 51, 234);
-        AddPalette("Dodger Blue", 30, 144, 255);
-        AddPalette("Deep Sky", 0, 191, 255);
-        AddPalette("Cyan", 0, 255, 255);
-        AddPalette("Lime", 50, 205, 50);
-        AddPalette("Chartreuse", 127, 255, 0);
-        AddPalette("Yellow", 255, 255, 0);
-        AddPalette("Silver", 192, 192, 192);
-        AddPalette("Gray", 128, 128, 128);
+        QueueSaveState();
     }
 
-    private void AddPalette(string name, byte r, byte g, byte b)
+    private List<LayoutLengthState> CaptureLayoutLengths()
     {
-        _colorPalette.Add(new ColorPaletteItem
+        return new List<LayoutLengthState>
         {
-            Name = name,
-            R = r,
-            G = g,
-            B = b,
-            CssColor = CssColorHelper.ToCssRgb(Color.FromRgb(r, g, b))
-        });
+            new() { Key = nameof(LeftMainColumn), Value = SerializeGridLength(LeftMainColumn.Width) },
+            new() { Key = nameof(RightMainColumn), Value = SerializeGridLength(RightMainColumn.Width) },
+            new() { Key = nameof(LeftBrowserRow), Value = SerializeGridLength(LeftBrowserRow.Height) },
+            new() { Key = nameof(LeftSegmentsRow), Value = SerializeGridLength(LeftSegmentsRow.Height) },
+            new() { Key = nameof(RightRecordsRow), Value = SerializeGridLength(RightRecordsRow.Height) },
+            new() { Key = nameof(RightTablesRow), Value = SerializeGridLength(RightTablesRow.Height) },
+            new() { Key = nameof(RightPreviewRow), Value = SerializeGridLength(RightPreviewRow.Height) }
+        };
     }
+
+    private void ApplyLayoutLengths(List<LayoutLengthState>? states)
+    {
+        if (states is null || states.Count == 0)
+            return;
+
+        ApplyGridLength(states, nameof(LeftMainColumn), value => LeftMainColumn.Width = value);
+        ApplyGridLength(states, nameof(RightMainColumn), value => RightMainColumn.Width = value);
+        ApplyGridLength(states, nameof(LeftBrowserRow), value => LeftBrowserRow.Height = value);
+        ApplyGridLength(states, nameof(LeftSegmentsRow), value => LeftSegmentsRow.Height = value);
+        ApplyGridLength(states, nameof(RightRecordsRow), value => RightRecordsRow.Height = value);
+        ApplyGridLength(states, nameof(RightTablesRow), value => RightTablesRow.Height = value);
+        ApplyGridLength(states, nameof(RightPreviewRow), value => RightPreviewRow.Height = value);
+    }
+
+    private static void ApplyGridLength(IEnumerable<LayoutLengthState> states, string key, Action<GridLength> apply)
+    {
+        var raw = states.FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.Ordinal))?.Value;
+        if (TryParseGridLength(raw, out var value))
+            apply(value);
+    }
+
+    private static string SerializeGridLength(GridLength value)
+    {
+        return value.GridUnitType switch
+        {
+            GridUnitType.Star => $"{value.Value.ToString(CultureInfo.InvariantCulture)}*",
+            GridUnitType.Auto => "Auto",
+            _ => value.Value.ToString(CultureInfo.InvariantCulture)
+        };
+    }
+
+    private static bool TryParseGridLength(string? raw, out GridLength result)
+    {
+        result = new GridLength(1, GridUnitType.Star);
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        raw = raw.Trim();
+        if (string.Equals(raw, "Auto", StringComparison.OrdinalIgnoreCase))
+        {
+            result = GridLength.Auto;
+            return true;
+        }
+
+        if (raw.EndsWith("*", StringComparison.Ordinal))
+        {
+            string starPart = raw[..^1];
+            if (string.IsNullOrWhiteSpace(starPart))
+                starPart = "1";
+
+            if (double.TryParse(starPart, NumberStyles.Float, CultureInfo.InvariantCulture, out double starValue) && starValue > 0)
+            {
+                result = new GridLength(starValue, GridUnitType.Star);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double pixelValue) && pixelValue >= 0)
+        {
+            result = new GridLength(pixelValue, GridUnitType.Pixel);
+            return true;
+        }
+
+        return false;
+    }
+
 
     private async Task InitializeBrowserAsync()
     {
@@ -580,7 +654,6 @@ public partial class MainWindow : Window
 
             var extraction = await TryExtractAsync(TimeSpan.FromSeconds(3));
             _lastExtraction = extraction;
-            RefreshJsonText();
 
             UpdateTrackNameHeader(extraction.TrackName);
 
@@ -648,7 +721,6 @@ public partial class MainWindow : Window
         _currentSelectedSegment = null;
         _currentSelectionSource = SelectionSource.None;
         _pendingEditorColor = null;
-        JsonTextBox.Clear();
         Table1RankInput.Clear();
         Table2RankInput.Clear();
 
@@ -657,7 +729,6 @@ public partial class MainWindow : Window
         Table1Grid.SelectedItem = null;
         Table2Grid.SelectedItem = null;
         SegmentsGrid.SelectedItem = null;
-        ColorPaletteGrid.SelectedItem = null;
         _isSynchronizingSelections = false;
 
         ResetPreview();
@@ -830,7 +901,6 @@ public partial class MainWindow : Window
         row.ApplyToSource();
         RefreshAllViewTexts();
         RenderCurrentPreview();
-        RefreshJsonText();
 
         if (ReferenceEquals(row, _currentSelectedSegment))
             LoadSelectedSegmentEditor(row);
@@ -867,8 +937,6 @@ public partial class MainWindow : Window
 
     private void LoadSelectedSegmentEditor(SegmentRowView row)
     {
-        SelectedSegmentInfoText.Text = $"Alan: {row.CellName}  •  Tag: {Safe(row.Tag, "-")}  •  Class: {Safe(row.ClassName, "-")}";
-
         if (CssColorHelper.TryParse(row.Color, out var color))
             SetPendingEditorColor(color, true);
         else
@@ -879,22 +947,9 @@ public partial class MainWindow : Window
         _suppressStyleSelectionEvent = false;
     }
 
-    private static string Safe(string? text, string fallback)
-    {
-        return string.IsNullOrWhiteSpace(text) ? fallback : text;
-    }
-
-    private ColorPaletteItem? FindMatchingPalette(string? cssColor)
-    {
-        if (!CssColorHelper.TryParse(cssColor, out var selected))
-            return null;
-
-        return _colorPalette.FirstOrDefault(item => item.R == selected.R && item.G == selected.G && item.B == selected.B);
-    }
 
     private void ResetSelectedSegmentEditor()
     {
-        SelectedSegmentInfoText.Text = "Bir segment seç";
         ResetEditorColorInputs();
 
         _suppressStyleSelectionEvent = true;
@@ -910,9 +965,6 @@ public partial class MainWindow : Window
         GreenTextBox.Text = string.Empty;
         BlueTextBox.Text = string.Empty;
 
-        _suppressPaletteApply = true;
-        ColorPaletteGrid.SelectedItem = null;
-        _suppressPaletteApply = false;
     }
 
     private void SetPendingEditorColor(Color color, bool syncPaletteSelection)
@@ -923,12 +975,6 @@ public partial class MainWindow : Window
         GreenTextBox.Text = color.G.ToString(CultureInfo.InvariantCulture);
         BlueTextBox.Text = color.B.ToString(CultureInfo.InvariantCulture);
 
-        if (!syncPaletteSelection)
-            return;
-
-        _suppressPaletteApply = true;
-        ColorPaletteGrid.SelectedItem = FindMatchingPalette(CssColorHelper.ToCssRgb(color));
-        _suppressPaletteApply = false;
     }
 
     private void SegmentStyleComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -983,18 +1029,6 @@ public partial class MainWindow : Window
         _currentSelectedSegment.Color = CssColorHelper.ToCssRgb(selectedColor);
     }
 
-    private void ColorPaletteGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressPaletteApply)
-            return;
-
-        if (ColorPaletteGrid.SelectedItem is ColorPaletteItem item)
-        {
-            var color = Color.FromRgb(item.R, item.G, item.B);
-            SetPendingEditorColor(color, false);
-            StatusText.Text = "Renk tablosundan seçim yapıldı. Uygulamak için RGB Uygula butonuna bas.";
-        }
-    }
 
     private bool TryReadRgb(out byte r, out byte g, out byte b)
     {
@@ -1007,130 +1041,33 @@ public partial class MainWindow : Window
 
     private void RenderCurrentPreview()
     {
+        _previewRows.Clear();
+
         if (_currentSelectedRecord is null)
         {
-            ResetPreview();
+            _previewRows.Add(PreviewRecordRowView.CreatePlaceholder());
             return;
         }
 
-        RenderCellPreview(PreviewRankText, _currentSelectedRecord.Rank);
-        RenderCellPreview(PreviewTimeText, _currentSelectedRecord.Time);
-        RenderCellPreview(PreviewByText, _currentSelectedRecord.By);
-
-        if (_currentSelectionSource == SelectionSource.FullRecord)
-        {
-            RenderCellPreview(PreviewModeText, _currentSelectedRecord.Mode);
-            RenderCellPreview(PreviewServerText, _currentSelectedRecord.Server);
-        }
-        else
-        {
-            SetPlainPreviewText(PreviewModeText, "-");
-            SetPlainPreviewText(PreviewServerText, "-");
-        }
+        _previewRows.Add(PreviewRecordRowView.FromRecord(_currentSelectedRecord, _currentSelectionSource));
     }
 
     private void ResetPreview()
     {
-        SetPlainPreviewText(PreviewRankText, "-");
-        SetPlainPreviewText(PreviewTimeText, "-");
-        SetPlainPreviewText(PreviewModeText, "-");
-        SetPlainPreviewText(PreviewByText, "-");
-        SetPlainPreviewText(PreviewServerText, "-");
+        _previewRows.Clear();
+        _previewRows.Add(PreviewRecordRowView.CreatePlaceholder());
     }
 
-    private static void SetPlainPreviewText(TextBlock target, string text)
-    {
-        target.Inlines.Clear();
-        target.Foreground = Brushes.White;
-        target.Text = text;
-    }
+    private static FontWeight ToFontWeight(string? cssValue) => MainWindowFontConverters.ToFontWeight(cssValue);
 
-    private void RenderCellPreview(TextBlock target, CellData cell)
-    {
-        target.Text = string.Empty;
-        target.Inlines.Clear();
+    private static FontStyle ToFontStyle(string? cssValue) => MainWindowFontConverters.ToFontStyle(cssValue);
 
-        EnsureEditableSegments(cell);
+    private static FontFamily? TryCreateFontFamily(string? cssValue) => MainWindowFontConverters.TryCreateFontFamily(cssValue);
 
-        if (cell.Segments.Count == 0)
-        {
-            target.Text = string.IsNullOrWhiteSpace(cell.Text) ? "-" : cell.Text;
-            target.Foreground = Brushes.White;
-            return;
-        }
-
-        foreach (var segment in cell.Segments)
-        {
-            var run = new Run(segment.Text)
-            {
-                Foreground = CssColorHelper.ToBrush(segment.Color, Brushes.White),
-                FontWeight = ToFontWeight(segment.FontWeight),
-                FontStyle = ToFontStyle(segment.FontStyle),
-                FontFamily = TryCreateFontFamily(segment.FontFamily) ?? target.FontFamily,
-                FontSize = TryParseFontSize(segment.FontSize) ?? target.FontSize
-            };
-
-            if (!string.IsNullOrWhiteSpace(segment.TextDecoration) &&
-                segment.TextDecoration.Contains("underline", StringComparison.OrdinalIgnoreCase))
-            {
-                run.TextDecorations = TextDecorations.Underline;
-            }
-
-            target.Inlines.Add(run);
-        }
-    }
-
-    private static FontWeight ToFontWeight(string? cssValue)
-    {
-        if (int.TryParse(cssValue, out int weight))
-        {
-            if (weight >= 700) return FontWeights.Bold;
-            if (weight >= 600) return FontWeights.SemiBold;
-            if (weight <= 300) return FontWeights.Light;
-        }
-
-        return cssValue?.Contains("bold", StringComparison.OrdinalIgnoreCase) == true
-            ? FontWeights.Bold
-            : FontWeights.Normal;
-    }
-
-    private static FontStyle ToFontStyle(string? cssValue)
-    {
-        return cssValue?.Contains("italic", StringComparison.OrdinalIgnoreCase) == true
-            ? FontStyles.Italic
-            : FontStyles.Normal;
-    }
-
-    private static FontFamily? TryCreateFontFamily(string? cssValue)
-    {
-        if (string.IsNullOrWhiteSpace(cssValue))
-            return null;
-
-        try
-        {
-            var first = cssValue.Split(',')[0].Trim().Trim('"', '\'');
-            return string.IsNullOrWhiteSpace(first) ? null : new FontFamily(first);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static double? TryParseFontSize(string? cssValue)
-    {
-        if (string.IsNullOrWhiteSpace(cssValue))
-            return null;
-
-        cssValue = cssValue.Replace("px", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
-        return double.TryParse(cssValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
-            ? size
-            : null;
-    }
+    private static double? TryParseFontSize(string? cssValue) => MainWindowFontConverters.TryParseFontSize(cssValue);
 
     private void RefreshJsonText()
     {
-        JsonTextBox.Text = JsonSerializer.Serialize(_lastExtraction, JsonOptions);
     }
 
     private void UpdateTrackNameHeader(string? trackName)
@@ -1275,6 +1212,11 @@ public partial class MainWindow : Window
         OpenButtonContextMenu(sender);
     }
 
+    private void RecordsMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenButtonContextMenu(sender);
+    }
+
     private void Table2MenuButton_Click(object sender, RoutedEventArgs e)
     {
         OpenButtonContextMenu(sender);
@@ -1308,6 +1250,110 @@ public partial class MainWindow : Window
     private void ImportTable2MenuItem_Click(object sender, RoutedEventArgs e)
     {
         ImportCustomTable(_table2Rows, Table2Grid, 2, "Tablo 2", SelectionSource.Table2);
+    }
+
+    private void ExportRecordsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ExportRecordsTable();
+    }
+
+    private void ImportRecordsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ImportRecordsTable();
+    }
+
+    private void ExportRecordsTable()
+    {
+        if (_rows.Count == 0)
+        {
+            MessageBox.Show("Çekilen kayıtlar boş olduğu için dışa aktarılamaz.");
+            return;
+        }
+
+        string safeTrackName = GetSafeTrackNameForFileName();
+        var dialog = new SaveFileDialog
+        {
+            Title = "Çekilen kayıtları dışa aktar",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            FileName = $"{safeTrackName}-records.txt",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            AddExtension = true,
+            DefaultExt = ".txt"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var payload = new TableFilePayload
+        {
+            TrackName = _currentTrackName,
+            TableName = "Çekilen kayıtlar",
+            ExportedAt = DateTime.Now,
+            Rows = _rows.Select(r => OnlineRecordCloner.CloneFullRecord(r.Source)).ToList()
+        };
+
+        Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName)!);
+        File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(payload, JsonOptions));
+        StatusText.Text = $"Çekilen kayıtlar dışa aktarıldı: {Path.GetFileName(dialog.FileName)}";
+    }
+
+    private void ImportRecordsTable()
+    {
+        string safeTrackName = GetSafeTrackNameForFileName();
+        var dialog = new OpenFileDialog
+        {
+            Title = "Çekilen kayıtları içe aktar",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            FileName = $"{safeTrackName}-records.txt",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            string json = File.ReadAllText(dialog.FileName);
+            List<OnlineRecord> rows;
+            string importedTrackName = string.Empty;
+
+            var payload = JsonSerializer.Deserialize<TableFilePayload>(json, JsonOptions);
+            if (payload?.Rows?.Count > 0)
+            {
+                rows = payload.Rows;
+                importedTrackName = payload.TrackName ?? string.Empty;
+            }
+            else
+            {
+                rows = JsonSerializer.Deserialize<List<OnlineRecord>>(json, JsonOptions) ?? new List<OnlineRecord>();
+            }
+
+            var extraction = new ExtractionResult
+            {
+                Success = rows.Count > 0,
+                Message = rows.Count > 0 ? "İçe aktarıldı" : "Dosyada kayıt bulunamadı",
+                TrackName = importedTrackName,
+                RecordCount = rows.Count,
+                Records = rows.Select(OnlineRecordCloner.CloneFullRecord).ToList()
+            };
+
+            ClearCurrentResults();
+            _lastExtraction = extraction;
+            UpdateTrackNameHeader(importedTrackName);
+
+            if (extraction.Success)
+                FillGrids(extraction);
+            else
+                ResetPreview();
+
+            StatusText.Text = $"Çekilen kayıtlar içe aktarıldı: {Path.GetFileName(dialog.FileName)}";
+            QueueSaveState();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"İçe aktarma başarısız:\n{ex.Message}", "İçe Aktarma Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ExportCustomTable(ObservableCollection<RankTimeByRowView> rows, int tableNumber, string tableName)
@@ -1509,7 +1555,6 @@ public partial class MainWindow : Window
             index++;
         }
 
-        RefreshJsonText();
         RenderCurrentPreview();
     }
 
@@ -1836,6 +1881,23 @@ public sealed class TextSegment
 
 public static class OnlineRecordFactory
 {
+    public static TextSegment CreatePreviewSegment(string text)
+    {
+        return new TextSegment
+        {
+            Text = text,
+            Color = "rgb(255, 255, 255)",
+            BackgroundColor = "transparent",
+            FontWeight = "400",
+            FontStyle = "normal",
+            TextDecoration = "none",
+            FontFamily = "Segoe UI",
+            FontSize = "14px",
+            ClassName = string.Empty,
+            Tag = "span"
+        };
+    }
+
     public static OnlineRecord CreateBlankRankTimeByRecord()
     {
         return new OnlineRecord
@@ -1856,19 +1918,7 @@ public static class OnlineRecordFactory
             Html = string.Empty,
             Segments = new List<TextSegment>
             {
-                new TextSegment
-                {
-                    Text = text,
-                    Color = "rgb(255, 255, 255)",
-                    BackgroundColor = "transparent",
-                    FontWeight = "400",
-                    FontStyle = "normal",
-                    TextDecoration = "none",
-                    FontFamily = "Segoe UI",
-                    FontSize = "14px",
-                    ClassName = string.Empty,
-                    Tag = "span"
-                }
+                CreatePreviewSegment(text)
             }
         };
     }
@@ -2107,6 +2157,43 @@ public sealed class RankTimeByRowView : ObservableObject
     }
 }
 
+public sealed class PreviewRecordRowView
+{
+    public List<TextSegment> RankSegments { get; init; } = new();
+    public List<TextSegment> TimeSegments { get; init; } = new();
+    public List<TextSegment> ModeSegments { get; init; } = new();
+    public List<TextSegment> BySegments { get; init; } = new();
+    public List<TextSegment> ServerSegments { get; init; } = new();
+
+    public static PreviewRecordRowView CreatePlaceholder()
+    {
+        return new PreviewRecordRowView
+        {
+            RankSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            TimeSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            ModeSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            BySegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            ServerSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") }
+        };
+    }
+
+    public static PreviewRecordRowView FromRecord(OnlineRecord record, SelectionSource source)
+    {
+        static List<TextSegment> CloneOrPlaceholder(CellData cell) => cell.Segments.Count > 0
+            ? cell.Segments.Select(OnlineRecordCloner.CloneSegment).ToList()
+            : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") };
+
+        return new PreviewRecordRowView
+        {
+            RankSegments = CloneOrPlaceholder(record.Rank),
+            TimeSegments = CloneOrPlaceholder(record.Time),
+            ModeSegments = source == SelectionSource.FullRecord ? CloneOrPlaceholder(record.Mode) : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            BySegments = CloneOrPlaceholder(record.By),
+            ServerSegments = source == SelectionSource.FullRecord ? CloneOrPlaceholder(record.Server) : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") }
+        };
+    }
+}
+
 public sealed class SegmentRowView : ObservableObject
 {
     public SegmentRowView(string cellName, CellData sourceCell, TextSegment sourceSegment)
@@ -2199,6 +2286,13 @@ public sealed class AppState
     public List<BookmarkStateItem> Bookmarks { get; set; } = new();
     public SelectionState? Selection { get; set; }
     public List<GridColumnState> ColumnWidths { get; set; } = new();
+    public List<LayoutLengthState> LayoutLengths { get; set; } = new();
+}
+
+public sealed class LayoutLengthState
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
 }
 
 public sealed class BookmarkStateItem
@@ -2220,6 +2314,7 @@ public sealed class GridColumnState
 {
     public string GridKey { get; set; } = string.Empty;
     public int ColumnIndex { get; set; }
+    public int DisplayIndex { get; set; } = -1;
     public string Header { get; set; } = string.Empty;
     public double Width { get; set; }
 }
@@ -2250,6 +2345,75 @@ public sealed class CssColorToBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
         throw new NotSupportedException();
+    }
+}
+
+public sealed class CssFontWeightConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => MainWindowFontConverters.ToFontWeight(value?.ToString());
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+public sealed class CssFontStyleConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => MainWindowFontConverters.ToFontStyle(value?.ToString());
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+public sealed class CssFontSizeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => MainWindowFontConverters.TryParseFontSize(value?.ToString()) ?? 14d;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+public sealed class CssFontFamilyConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => MainWindowFontConverters.TryCreateFontFamily(value?.ToString()) ?? new FontFamily("Segoe UI");
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+internal static class MainWindowFontConverters
+{
+    public static FontWeight ToFontWeight(string? cssValue)
+    {
+        if (int.TryParse(cssValue, out int weight))
+        {
+            if (weight >= 700) return FontWeights.Bold;
+            if (weight >= 600) return FontWeights.SemiBold;
+            if (weight <= 300) return FontWeights.Light;
+        }
+
+        return cssValue?.Contains("bold", StringComparison.OrdinalIgnoreCase) == true ? FontWeights.Bold : FontWeights.Normal;
+    }
+
+    public static FontStyle ToFontStyle(string? cssValue)
+    {
+        return cssValue?.Contains("italic", StringComparison.OrdinalIgnoreCase) == true ? FontStyles.Italic : FontStyles.Normal;
+    }
+
+    public static FontFamily? TryCreateFontFamily(string? cssValue)
+    {
+        if (string.IsNullOrWhiteSpace(cssValue))
+            return null;
+
+        try
+        {
+            var first = cssValue.Split(',')[0].Trim().Trim('"', '\'');
+            return string.IsNullOrWhiteSpace(first) ? null : new FontFamily(first);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static double? TryParseFontSize(string? cssValue)
+    {
+        if (string.IsNullOrWhiteSpace(cssValue))
+            return null;
+
+        cssValue = cssValue.Replace("px", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+        return double.TryParse(cssValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var size) ? size : null;
     }
 }
 
