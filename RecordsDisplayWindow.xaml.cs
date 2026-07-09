@@ -155,31 +155,148 @@ public partial class RecordsDisplayWindow : Window
 
     private void ApplyWindowSettings()
     {
-        Left = _settings.WindowLeft;
-        Top = _settings.WindowTop;
-        Width = Math.Max(220, _settings.WindowWidth);
-        Height = Math.Max(160, _settings.WindowHeight);
+        Thickness framePadding = GetClampedFramePaddingThickness();
+        bool hasVisibleFrame = OverlayAssetCatalog.ResolveFramePath(_settings) is not null && Math.Clamp(_settings.FrameOpacity, 0, 1) > 0;
+        Thickness frameBleed = hasVisibleFrame ? GetFrameBleedThickness(framePadding) : new Thickness(0);
+
+        Left = _settings.WindowLeft - frameBleed.Left;
+        Top = _settings.WindowTop - frameBleed.Top;
+        Width = Math.Max(220, _settings.WindowWidth + frameBleed.Left + frameBleed.Right);
+        Height = Math.Max(160, _settings.WindowHeight + frameBleed.Top + frameBleed.Bottom);
+        ContainerBorder.Margin = frameBleed;
 
         FontWeight fontWeight = _settings.UseBoldText ? FontWeights.Bold : FontWeights.Normal;
         TitleTextBlock.FontSize = _settings.TitleSize;
         TitleTextBlock.FontWeight = fontWeight;
-        TrackNameTextBlock.FontSize = _settings.FontSize;
-        TrackNameTextBlock.FontWeight = fontWeight;
+        TitleTextBlock.Foreground = CssColorHelper.ToBrush(_settings.TitleColor, Brushes.White);
+        LeaderboardList.Margin = new Thickness(0, Math.Clamp(_settings.TitleTextSpacing, 0, 100), 0, 0);
+        MapLabelTextBlock.FontSize = _settings.FontSize;
+        MapLabelTextBlock.FontWeight = fontWeight;
+        MapLabelTextBlock.Foreground = CssColorHelper.ToBrush(_settings.MapLabelColor, Brushes.White);
+        MapNameTextBlock.FontSize = _settings.FontSize;
+        MapNameTextBlock.FontWeight = fontWeight;
+        MapNameTextBlock.Foreground = CssColorHelper.ToBrush(_settings.MapNameColor, Brushes.White);
+
+        double colorCornerRadius = Math.Clamp(_settings.BorderRadius, 0, 120);
+        ContainerBorder.CornerRadius = new CornerRadius(Math.Max(
+            colorCornerRadius,
+            Math.Clamp(_settings.BackgroundImageBorderRadius, 0, 120)));
+
+        Thickness textPadding = GetClampedPositiveThickness(_settings.TextPaddingLeft, _settings.TextPaddingTop, _settings.TextPaddingRight, _settings.TextPaddingBottom, 0, 120);
+        ContentGrid.Margin = textPadding;
+
+        Thickness colorPadding = GetClampedPositiveThickness(_settings.BackgroundColorPaddingLeft, _settings.BackgroundColorPaddingTop, _settings.BackgroundColorPaddingRight, _settings.BackgroundColorPaddingBottom, 0, 120);
+        ColorBackgroundBorder.Margin = colorPadding;
+        ColorBackgroundBorder.CornerRadius = new CornerRadius(GetAdjustedCornerRadius(colorCornerRadius, colorPadding));
 
         if (CssColorHelper.TryParse(_settings.BackgroundColor, out var color))
         {
             double opacity = Math.Clamp(_settings.BackgroundOpacity, 0, 1);
-            ContainerBorder.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255d), color.R, color.G, color.B));
+            ColorBackgroundBorder.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255d), color.R, color.G, color.B));
         }
         else
         {
-            ContainerBorder.Background = new SolidColorBrush(Color.FromArgb(220, 17, 17, 17));
+            ColorBackgroundBorder.Background = new SolidColorBrush(Color.FromArgb(220, 17, 17, 17));
         }
 
-        ContainerBorder.CornerRadius = new CornerRadius(Math.Clamp(_settings.BorderRadius, 0, 120));
+        ApplyBackgroundImageLayer();
+        ApplyFrameLayer(framePadding);
 
         NormalizeAnimationState();
     }
+
+
+    private void ApplyBackgroundImageLayer()
+    {
+        string? backgroundPath = OverlayAssetCatalog.ResolveBackgroundPath(_settings);
+        Thickness imagePadding = GetClampedPositiveThickness(_settings.ImagePaddingLeft, _settings.ImagePaddingTop, _settings.ImagePaddingRight, _settings.ImagePaddingBottom, 0, 120);
+        BackgroundImageBorder.Margin = imagePadding;
+        BackgroundImageBorder.CornerRadius = new CornerRadius(GetAdjustedCornerRadius(
+            Math.Clamp(_settings.BackgroundImageBorderRadius, 0, 120),
+            imagePadding));
+
+        var brush = OverlayAssetCatalog.CreateImageBrush(backgroundPath);
+        if (brush is null)
+        {
+            BackgroundImageBorder.Background = null;
+            BackgroundImageBorder.Opacity = 0;
+            return;
+        }
+
+        BackgroundImageBorder.Background = brush;
+        BackgroundImageBorder.Opacity = Math.Clamp(_settings.BackgroundImageOpacity, 0, 1);
+    }
+
+    private void ApplyFrameLayer(Thickness framePadding)
+    {
+        string? framePath = OverlayAssetCatalog.ResolveFramePath(_settings);
+        FrameOverlayImage.Margin = new Thickness(
+            Math.Max(0, framePadding.Left),
+            Math.Max(0, framePadding.Top),
+            Math.Max(0, framePadding.Right),
+            Math.Max(0, framePadding.Bottom));
+
+        var source = OverlayAssetCatalog.LoadImage(framePath);
+        if (source is null)
+        {
+            FrameOverlayImage.Source = null;
+            FrameOverlayImage.Opacity = 0;
+            return;
+        }
+
+        FrameOverlayImage.Source = source;
+        FrameOverlayImage.Opacity = Math.Clamp(_settings.FrameOpacity, 0, 1);
+    }
+
+    private static double GetAdjustedCornerRadius(double radius, Thickness padding)
+    {
+        double maxPadding = Math.Max(Math.Max(padding.Left, padding.Right), Math.Max(padding.Top, padding.Bottom));
+        return Math.Max(0, radius - Math.Max(0, maxPadding * 0.65));
+    }
+
+    private Thickness GetClampedFramePaddingThickness()
+    {
+        return new Thickness(
+            ClampFramePadding(_settings.FramePaddingLeft),
+            ClampFramePadding(_settings.FramePaddingTop),
+            ClampFramePadding(_settings.FramePaddingRight),
+            ClampFramePadding(_settings.FramePaddingBottom));
+    }
+
+    private static Thickness GetFrameBleedThickness(Thickness framePadding)
+    {
+        return new Thickness(
+            Math.Max(0, -framePadding.Left),
+            Math.Max(0, -framePadding.Top),
+            Math.Max(0, -framePadding.Right),
+            Math.Max(0, -framePadding.Bottom));
+    }
+
+    private static Thickness GetClampedPositiveThickness(double left, double top, double right, double bottom, double min, double max)
+    {
+        return new Thickness(
+            ClampPadding(left, min, max),
+            ClampPadding(top, min, max),
+            ClampPadding(right, min, max),
+            ClampPadding(bottom, min, max));
+    }
+
+    private static double ClampPadding(double value, double min, double max)
+    {
+        if (!double.IsFinite(value))
+            return min;
+
+        return Math.Clamp(value, min, max);
+    }
+
+    private static double ClampFramePadding(double value)
+    {
+        if (!double.IsFinite(value))
+            return 0;
+
+        return Math.Clamp(value, -240, 240);
+    }
+
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -608,7 +725,10 @@ public partial class RecordsDisplayWindow : Window
             index++;
         }
 
-        TrackNameTextBlock.Text = string.IsNullOrWhiteSpace(_trackName) ? string.Empty : $"Map: {_trackName}";
+        bool hasTrackName = !string.IsNullOrWhiteSpace(_trackName);
+        TrackLinePanel.Visibility = hasTrackName ? Visibility.Visible : Visibility.Collapsed;
+        MapLabelTextBlock.Text = hasTrackName ? "Map: " : string.Empty;
+        MapNameTextBlock.Text = hasTrackName ? _trackName : string.Empty;
     }
 
 

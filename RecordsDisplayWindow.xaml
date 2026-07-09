@@ -16,78 +16,110 @@
         Topmost="False"
         Icon="pack://application:,,,/Assets/f1_app_icon.ico"
         PreviewKeyDown="Window_PreviewKeyDown">
-    <Grid>
-        <Border x:Name="ContainerBorder" CornerRadius="12" Padding="18" Background="#DD111111">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+    <Grid x:Name="RootHostGrid" ClipToBounds="False">
+        <Border x:Name="ContainerBorder" CornerRadius="12" Background="Transparent" Margin="0">
+            <Grid x:Name="ClippedContentHost" ClipToBounds="True">
+                <Border x:Name="ColorBackgroundBorder"
+                        Margin="0"
+                        CornerRadius="12"
+                        Background="#DD111111"
+                        IsHitTestVisible="False"/>
 
-                <TextBlock x:Name="TitleTextBlock"
-                           Text="Records"
-                           Grid.Row="0"
-                           HorizontalAlignment="Center"
-                           TextAlignment="Center"
-                           Foreground="#F8FAFC"
-                           FontWeight="Bold"
-                           FontSize="20"/>
+                <Border x:Name="BackgroundImageBorder"
+                        Margin="18"
+                        CornerRadius="10"
+                        Opacity="0"
+                        IsHitTestVisible="False"/>
 
-                <Grid x:Name="LeaderboardList" Grid.Row="1" Margin="0,18,0,18" Opacity="1" RenderTransformOrigin="0.5,0.5">
-                    <Grid.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="ListScaleTransform" ScaleX="1" ScaleY="1"/>
-                            <TranslateTransform x:Name="ListTransform" X="0" Y="0"/>
-                        </TransformGroup>
-                    </Grid.RenderTransform>
-                    <ItemsControl x:Name="RowsItemsControl">
-                        <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type local:RecordsDisplayRowView}">
-                            <StackPanel Orientation="Horizontal" Margin="{Binding RowMargin}">
-                                <TextBlock Text="{Binding RankText}"
-                                           Foreground="{Binding RankBrush}"
-                                           Margin="{Binding RankMargin}"
-                                           FontSize="{Binding FontSize}"
-                                           FontWeight="{Binding FontWeight}"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding TimeText}"
-                                           Foreground="{Binding TimeBrush}"
-                                           Margin="{Binding TimeMargin}"
-                                           FontSize="{Binding FontSize}"
-                                           FontWeight="{Binding FontWeight}"
-                                           VerticalAlignment="Center"/>
-                                <ItemsControl ItemsSource="{Binding BySegments}" VerticalAlignment="Center">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type local:DisplayTextRun}">
-                                            <TextBlock Text="{Binding Text}"
-                                                       Foreground="{Binding Foreground}"
-                                                       FontStyle="{Binding FontStyle}"
-                                                       FontSize="{Binding FontSize}"
-                                                       FontWeight="{Binding FontWeight}"
-                                                       VerticalAlignment="Center"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                <Grid x:Name="ContentGrid" Margin="18">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="TitleTextBlock"
+                               Text="Records"
+                               Grid.Row="0"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Foreground="#F8FAFC"
+                               FontWeight="Bold"
+                               FontSize="20"/>
+
+                    <Grid x:Name="LeaderboardList" Grid.Row="1" Margin="0" Opacity="1" RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="ListScaleTransform" ScaleX="1" ScaleY="1"/>
+                                <TranslateTransform x:Name="ListTransform" X="0" Y="0"/>
+                            </TransformGroup>
+                        </Grid.RenderTransform>
+                        <ItemsControl x:Name="RowsItemsControl">
+                            <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:RecordsDisplayRowView}">
+                                <StackPanel Orientation="Horizontal" Margin="{Binding RowMargin}">
+                                    <TextBlock Text="{Binding RankText}"
+                                               Foreground="{Binding RankBrush}"
+                                               Margin="{Binding RankMargin}"
+                                               FontSize="{Binding FontSize}"
+                                               FontWeight="{Binding FontWeight}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding TimeText}"
+                                               Foreground="{Binding TimeBrush}"
+                                               Margin="{Binding TimeMargin}"
+                                               FontSize="{Binding FontSize}"
+                                               FontWeight="{Binding FontWeight}"
+                                               VerticalAlignment="Center"/>
+                                    <ItemsControl ItemsSource="{Binding BySegments}" VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type local:DisplayTextRun}">
+                                                <TextBlock Text="{Binding Text}"
+                                                           Foreground="{Binding Foreground}"
+                                                           FontStyle="{Binding FontStyle}"
+                                                           FontSize="{Binding FontSize}"
+                                                           FontWeight="{Binding FontWeight}"
+                                                           VerticalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
+                    <StackPanel x:Name="TrackLinePanel"
+                                Grid.Row="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Left"
+                                Visibility="Collapsed">
+                        <TextBlock x:Name="MapLabelTextBlock"
+                                   Text="Map: "
+                                   TextAlignment="Left"
+                                   Foreground="#F8FAFC"
+                                   FontWeight="Bold"
+                                   FontSize="16"/>
+                        <TextBlock x:Name="MapNameTextBlock"
+                                   Text=""
+                                   TextAlignment="Left"
+                                   Foreground="#F8FAFC"
+                                   FontWeight="Bold"
+                                   FontSize="16"/>
+                    </StackPanel>
                 </Grid>
-
-                <TextBlock x:Name="TrackNameTextBlock"
-                           Grid.Row="2"
-                           HorizontalAlignment="Left"
-                           TextAlignment="Left"
-                           Foreground="#F8FAFC"
-                           FontWeight="Bold"
-                           FontSize="16"/>
             </Grid>
         </Border>
+
+        <Image x:Name="FrameOverlayImage"
+               Margin="0"
+               Stretch="Fill"
+               Opacity="0"
+               Panel.ZIndex="10"
+               IsHitTestVisible="False"/>
     </Grid>
 </Window>

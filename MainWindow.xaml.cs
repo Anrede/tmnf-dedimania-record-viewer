@@ -219,7 +219,6 @@ public partial class MainWindow : Window
         }
 
         EnsureRecordsDisplaySettingsWindow();
-        _recordsDisplaySettingsWindow!.Owner = this;
         _recordsDisplaySettingsWindow!.LoadSettings(_recordsDisplaySettings);
         _recordsDisplaySettingsWindow.Show();
         _recordsDisplaySettingsWindow.Activate();
