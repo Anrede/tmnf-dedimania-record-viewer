@@ -26,6 +26,7 @@ public partial class RecordsDisplayWindow : Window
     {
         InitializeComponent();
         RowsItemsControl.ItemsSource = _displayRows;
+        FrameOverlayImage.SizeChanged += (_, _) => UpdateFrameClip();
         Closed += (_, _) => StopTopmostTimer();
     }
 
@@ -166,16 +167,22 @@ public partial class RecordsDisplayWindow : Window
         ContainerBorder.Margin = frameBleed;
 
         FontWeight fontWeight = _settings.UseBoldText ? FontWeights.Bold : FontWeights.Normal;
+        TitleTextBlock.Text = _settings.TitleText ?? string.Empty;
         TitleTextBlock.FontSize = _settings.TitleSize;
         TitleTextBlock.FontWeight = fontWeight;
         TitleTextBlock.Foreground = CssColorHelper.ToBrush(_settings.TitleColor, Brushes.White);
+        ApplyTextAlignment(TitleTextBlock, _settings.TitleAlignment, TextAlignment.Center);
         LeaderboardList.Margin = new Thickness(0, Math.Clamp(_settings.TitleTextSpacing, 0, 100), 0, 0);
-        MapLabelTextBlock.FontSize = _settings.FontSize;
+        TrackLinePanel.Margin = new Thickness(0, Math.Clamp(_settings.TextMapSpacing, 0, 100), 0, 0);
+        ApplyHorizontalAlignment(TrackLinePanel, _settings.MapAlignment, HorizontalAlignment.Left);
+        MapLabelTextBlock.FontSize = _settings.MapSize;
         MapLabelTextBlock.FontWeight = fontWeight;
         MapLabelTextBlock.Foreground = CssColorHelper.ToBrush(_settings.MapLabelColor, Brushes.White);
-        MapNameTextBlock.FontSize = _settings.FontSize;
+        MapNameTextBlock.FontSize = _settings.MapSize;
         MapNameTextBlock.FontWeight = fontWeight;
         MapNameTextBlock.Foreground = CssColorHelper.ToBrush(_settings.MapNameColor, Brushes.White);
+        ApplyTextAlignment(MapLabelTextBlock, _settings.MapAlignment, TextAlignment.Left);
+        ApplyTextAlignment(MapNameTextBlock, _settings.MapAlignment, TextAlignment.Left);
 
         double colorCornerRadius = Math.Clamp(_settings.BorderRadius, 0, 120);
         ContainerBorder.CornerRadius = new CornerRadius(Math.Max(
@@ -241,11 +248,27 @@ public partial class RecordsDisplayWindow : Window
         {
             FrameOverlayImage.Source = null;
             FrameOverlayImage.Opacity = 0;
+            FrameOverlayImage.Clip = null;
             return;
         }
 
         FrameOverlayImage.Source = source;
         FrameOverlayImage.Opacity = Math.Clamp(_settings.FrameOpacity, 0, 1);
+        UpdateFrameClip();
+    }
+
+    private void UpdateFrameClip()
+    {
+        double radius = Math.Clamp(_settings.FrameRadius, 0, 240);
+        if (radius <= 0 || FrameOverlayImage.ActualWidth <= 0 || FrameOverlayImage.ActualHeight <= 0)
+        {
+            FrameOverlayImage.Clip = null;
+            return;
+        }
+
+        double maxRadius = Math.Min(FrameOverlayImage.ActualWidth, FrameOverlayImage.ActualHeight) / 2d;
+        double appliedRadius = Math.Min(radius, maxRadius);
+        FrameOverlayImage.Clip = new RectangleGeometry(new Rect(0, 0, FrameOverlayImage.ActualWidth, FrameOverlayImage.ActualHeight), appliedRadius, appliedRadius);
     }
 
     private static double GetAdjustedCornerRadius(double radius, Thickness padding)
@@ -726,11 +749,57 @@ public partial class RecordsDisplayWindow : Window
         }
 
         bool hasTrackName = !string.IsNullOrWhiteSpace(_trackName);
-        TrackLinePanel.Visibility = hasTrackName ? Visibility.Visible : Visibility.Collapsed;
-        MapLabelTextBlock.Text = hasTrackName ? "Map: " : string.Empty;
-        MapNameTextBlock.Text = hasTrackName ? _trackName : string.Empty;
+        bool showMapName = _settings.ShowMapName && hasTrackName;
+        string mapLabelText = _settings.MapLabelText ?? string.Empty;
+        bool showMapLine = !string.IsNullOrWhiteSpace(mapLabelText) || showMapName;
+        TrackLinePanel.Visibility = showMapLine ? Visibility.Visible : Visibility.Collapsed;
+        MapLabelTextBlock.Text = showMapLine ? FormatMapLabelForDisplay(mapLabelText, showMapName) : string.Empty;
+        MapNameTextBlock.Visibility = showMapName ? Visibility.Visible : Visibility.Collapsed;
+        MapNameTextBlock.Text = showMapName ? _trackName : string.Empty;
     }
 
+
+    private static void ApplyHorizontalAlignment(System.Windows.FrameworkElement element, string? alignment, HorizontalAlignment fallback)
+    {
+        element.HorizontalAlignment = alignment switch
+        {
+            "Left" => HorizontalAlignment.Left,
+            "Right" => HorizontalAlignment.Right,
+            "Center" => HorizontalAlignment.Center,
+            _ => fallback
+        };
+    }
+
+    private static void ApplyTextAlignment(System.Windows.Controls.TextBlock textBlock, string? alignment, TextAlignment fallback)
+    {
+        textBlock.TextAlignment = alignment switch
+        {
+            "Left" => TextAlignment.Left,
+            "Right" => TextAlignment.Right,
+            "Center" => TextAlignment.Center,
+            _ => fallback
+        };
+
+        textBlock.HorizontalAlignment = alignment switch
+        {
+            "Left" => HorizontalAlignment.Left,
+            "Right" => HorizontalAlignment.Right,
+            "Center" => HorizontalAlignment.Center,
+            _ => textBlock.HorizontalAlignment
+        };
+    }
+
+    private static string FormatMapLabelForDisplay(string rawLabel, bool showMapName)
+    {
+        string value = rawLabel?.Trim() ?? string.Empty;
+        if (!showMapName)
+            return value;
+
+        if (value.Length == 0)
+            return string.Empty;
+
+        return char.IsWhiteSpace(value[^1]) ? value : value + " ";
+    }
 
     private readonly record struct TransitionSnapshot(double Opacity, double X, double Y, double ScaleX, double ScaleY);
 

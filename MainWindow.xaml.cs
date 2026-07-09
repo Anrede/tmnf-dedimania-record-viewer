@@ -207,6 +207,8 @@ public partial class MainWindow : Window
 
     private void CustomTableRows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        RenumberCustomTable(_table1Rows);
+        RenumberCustomTable(_table2Rows);
         UpdateRecordsDisplayWindow();
     }
 
@@ -990,16 +992,42 @@ public partial class MainWindow : Window
         await NavigateAsync(UrlTextBox.Text);
     }
 
+    private bool TryGetSafeUrl(string url, out string safeUrl)
+{
+    safeUrl = "https://www.google.com";
+
+    if (string.IsNullOrWhiteSpace(url))
+        return false;
+
+    if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+        return false;
+
+    if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        return false;
+
+    safeUrl = uri.ToString();
+    return true;
+}
+
     private async Task NavigateAsync(string url)
     {
-        if (Browser.CoreWebView2 is null)
+        if (Browser?.CoreWebView2 is null)
             return;
 
         string normalizedUrl = NormalizeUrl(url);
+
         _pageReady = false;
         UrlTextBox.Text = normalizedUrl;
         StatusText.Text = "Opening page...";
-        Browser.CoreWebView2.Navigate(normalizedUrl);
+
+        try
+        {
+            Browser.CoreWebView2.Navigate(normalizedUrl);
+        }
+        catch
+        {
+            Browser.CoreWebView2.Navigate("https://www.google.com");
+        }
         await Task.CompletedTask;
     }
 
@@ -2412,9 +2440,11 @@ public partial class MainWindow : Window
 
     private static string NormalizeUrl(string? rawUrl)
     {
+        const string fallback = "https://www.google.com";
         string url = (rawUrl ?? string.Empty).Trim();
+
         if (string.IsNullOrWhiteSpace(url))
-            return "https://tmnf.exchange/trackshow/9684537";
+            return fallback;
 
         if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
             !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -2422,7 +2452,17 @@ public partial class MainWindow : Window
             url = "https://" + url;
         }
 
-        return url;
+        //URI validation
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+            return fallback;
+        //Scheme control
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return fallback;
+        //Host controlü
+        if (string.IsNullOrWhiteSpace(uri.Host))
+            return fallback;
+
+        return uri.ToString();
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()

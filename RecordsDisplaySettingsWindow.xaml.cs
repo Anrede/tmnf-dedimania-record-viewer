@@ -22,6 +22,24 @@ public partial class RecordsDisplaySettingsWindow : Window
     private bool _displayElementColorDirty;
     private bool _isSynchronizingPaddingInputs;
     private const string NoneItem = "(none)";
+    private const string BuiltInSourceMode = "BuiltIn";
+    private const string CustomSourceMode = "Custom";
+    private const string PresetColorSourceMode = "Preset";
+    private const string CustomColorItem = "(none)";
+
+    private static readonly (string Name, string Css)[] BackgroundColorPresets =
+    {
+        ("Red", "rgb(220, 38, 38)"),
+        ("Green", "rgb(22, 163, 74)"),
+        ("Blue", "rgb(37, 99, 235)"),
+        ("Yellow", "rgb(234, 179, 8)"),
+        ("White", "rgb(248, 250, 252)"),
+        ("Black", "rgb(15, 23, 42)"),
+        ("Purple", "rgb(147, 51, 234)"),
+        ("Gold", "rgb(212, 175, 55)"),
+        ("Silver", "rgb(192, 192, 192)"),
+        ("Bronze", "rgb(205, 127, 50)")
+    };
 
     public event Action<RecordsDisplaySettings>? SettingsApplied;
 
@@ -30,6 +48,7 @@ public partial class RecordsDisplaySettingsWindow : Window
         _isLoading = true;
         InitializeComponent();
         TransformAnimationComboBox.ItemsSource = RecordDisplayAnimationPresets.All;
+        RefreshBackgroundColorPresetComboBox();
         _isLoading = false;
     }
 
@@ -49,6 +68,12 @@ public partial class RecordsDisplaySettingsWindow : Window
             ShowCountTextBox.Text = _workingSettings.ShowCount.ToString(CultureInfo.InvariantCulture);
             TitleSizeTextBox.Text = _workingSettings.TitleSize.ToString(CultureInfo.InvariantCulture);
             FontSizeTextBox.Text = _workingSettings.FontSize.ToString(CultureInfo.InvariantCulture);
+            MapSizeTextBox.Text = _workingSettings.MapSize.ToString(CultureInfo.InvariantCulture);
+            TitleTextContentTextBox.Text = _workingSettings.TitleText;
+            MapLabelTextContentTextBox.Text = _workingSettings.MapLabelText;
+            ShowMapNameCheckBox.IsChecked = _workingSettings.ShowMapName;
+            SelectAlignmentComboBoxItem(TitleAlignmentComboBox, _workingSettings.TitleAlignment);
+            SelectAlignmentComboBoxItem(MapAlignmentComboBox, _workingSettings.MapAlignment);
             FontWeightComboBox.SelectedIndex = _workingSettings.UseBoldText ? 1 : 0;
             WindowLeftTextBox.Text = _workingSettings.WindowLeft.ToString(CultureInfo.InvariantCulture);
             WindowTopTextBox.Text = _workingSettings.WindowTop.ToString(CultureInfo.InvariantCulture);
@@ -56,6 +81,7 @@ public partial class RecordsDisplaySettingsWindow : Window
             WindowHeightTextBox.Text = _workingSettings.WindowHeight.ToString(CultureInfo.InvariantCulture);
             TitleTextSpacingTextBox.Text = _workingSettings.TitleTextSpacing.ToString(CultureInfo.InvariantCulture);
             VerticalSpacingTextBox.Text = _workingSettings.VerticalSpacing.ToString(CultureInfo.InvariantCulture);
+            TextMapSpacingTextBox.Text = _workingSettings.TextMapSpacing.ToString(CultureInfo.InvariantCulture);
             RankTimeSpacingTextBox.Text = _workingSettings.RankTimeSpacing.ToString(CultureInfo.InvariantCulture);
             TimeBySpacingTextBox.Text = _workingSettings.TimeBySpacing.ToString(CultureInfo.InvariantCulture);
             TextPaddingSyncCheckBox.IsChecked = _workingSettings.TextPaddingSync;
@@ -78,14 +104,19 @@ public partial class RecordsDisplaySettingsWindow : Window
             ImagePaddingRightTextBox.Text = _workingSettings.ImagePaddingRight.ToString(CultureInfo.InvariantCulture);
             ImagePaddingTopTextBox.Text = _workingSettings.ImagePaddingTop.ToString(CultureInfo.InvariantCulture);
             ImagePaddingBottomTextBox.Text = _workingSettings.ImagePaddingBottom.ToString(CultureInfo.InvariantCulture);
-            BackgroundColorTextBox.Text = _workingSettings.BackgroundColor;
+            _workingSettings.BackgroundColorSourceMode = NormalizeBackgroundColorSourceMode(_workingSettings.BackgroundColorSourceMode, _workingSettings.BackgroundColorPresetName, _workingSettings.CustomBackgroundColor);
+            BackgroundColorTextBox.Text = string.IsNullOrWhiteSpace(_workingSettings.CustomBackgroundColor) ? _workingSettings.BackgroundColor : _workingSettings.CustomBackgroundColor;
             BackgroundOpacityTextBox.Text = _workingSettings.BackgroundOpacity.ToString(CultureInfo.InvariantCulture);
             BorderRadiusTextBox.Text = _workingSettings.BorderRadius.ToString(CultureInfo.InvariantCulture);
             BackgroundImageOpacityTextBox.Text = _workingSettings.BackgroundImageOpacity.ToString(CultureInfo.InvariantCulture);
             BackgroundImageBorderRadiusTextBox.Text = _workingSettings.BackgroundImageBorderRadius.ToString(CultureInfo.InvariantCulture);
             CustomBackgroundPathTextBox.Text = _workingSettings.CustomBackgroundPath;
             CustomFramePathTextBox.Text = _workingSettings.CustomFramePath;
+            _workingSettings.BackgroundSourceMode = NormalizeSourceMode(_workingSettings.BackgroundSourceMode, _workingSettings.BackgroundAssetName, _workingSettings.CustomBackgroundPath);
+            _workingSettings.FrameSourceMode = NormalizeSourceMode(_workingSettings.FrameSourceMode, _workingSettings.FrameAssetName, _workingSettings.CustomFramePath);
             FrameOpacityTextBox.Text = _workingSettings.FrameOpacity.ToString(CultureInfo.InvariantCulture);
+            FrameRadiusTextBox.Text = _workingSettings.FrameRadius.ToString(CultureInfo.InvariantCulture);
+            RefreshBackgroundColorPresetComboBox();
             RefreshOverlayAssetComboBoxes();
             TransformAnimationComboBox.SelectedItem = _workingSettings.TransformAnimation;
 
@@ -226,6 +257,7 @@ public partial class RecordsDisplaySettingsWindow : Window
 
     private void PickBackgroundColorButton_Click(object sender, RoutedEventArgs e)
     {
+        ActivateBackgroundColorCustomSource();
         PickCssColorInto(BackgroundColorTextBox);
     }
 
@@ -264,12 +296,14 @@ public partial class RecordsDisplaySettingsWindow : Window
 
     private void BrowseBackgroundButton_Click(object sender, RoutedEventArgs e)
     {
-        BrowseImagePathInto(CustomBackgroundPathTextBox);
+        if (BrowseImagePathInto(CustomBackgroundPathTextBox))
+            ActivateBackgroundCustomSource();
     }
 
     private void BrowseFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        BrowseImagePathInto(CustomFramePathTextBox);
+        if (BrowseImagePathInto(CustomFramePathTextBox))
+            ActivateFrameCustomSource();
     }
 
     private static void PickCssColorInto(TextBox target)
@@ -287,6 +321,111 @@ public partial class RecordsDisplaySettingsWindow : Window
             target.Text = $"rgb({dialog.Color.R}, {dialog.Color.G}, {dialog.Color.B})";
     }
 
+
+    private static string? NormalizeColorPresetSelection(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || string.Equals(value, CustomColorItem, StringComparison.Ordinal))
+            return null;
+
+        return value.Trim();
+    }
+
+    private static bool TryGetBackgroundColorPresetCss(string? presetName, out string css)
+    {
+        foreach (var preset in BackgroundColorPresets)
+        {
+            if (string.Equals(preset.Name, presetName, StringComparison.OrdinalIgnoreCase))
+            {
+                css = preset.Css;
+                return true;
+            }
+        }
+
+        css = string.Empty;
+        return false;
+    }
+
+    private static string NormalizeBackgroundColorSourceMode(string? value, string? presetName, string? customColor)
+    {
+        if (string.Equals(value, PresetColorSourceMode, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(presetName))
+            return PresetColorSourceMode;
+
+        if (string.Equals(value, CustomSourceMode, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(customColor))
+            return CustomSourceMode;
+
+        if (!string.IsNullOrWhiteSpace(presetName))
+            return PresetColorSourceMode;
+
+        return CustomSourceMode;
+    }
+
+    private void RefreshBackgroundColorPresetComboBox()
+    {
+        bool previousLoading = _isLoading;
+        _isLoading = true;
+        try
+        {
+            BackgroundColorPresetComboBox.Items.Clear();
+            BackgroundColorPresetComboBox.Items.Add(CustomColorItem);
+            foreach (var preset in BackgroundColorPresets)
+                BackgroundColorPresetComboBox.Items.Add(preset.Name);
+
+            string? selectedPreset = NormalizeColorPresetSelection(_workingSettings.BackgroundColorPresetName);
+            if (selectedPreset is null && TryMatchPresetNameFromCss(_workingSettings.BackgroundColor, out string matchedPreset))
+                selectedPreset = matchedPreset;
+
+            string selection = string.Equals(_workingSettings.BackgroundColorSourceMode, PresetColorSourceMode, StringComparison.OrdinalIgnoreCase)
+                ? (selectedPreset ?? CustomColorItem)
+                : (selectedPreset ?? CustomColorItem);
+
+            BackgroundColorPresetComboBox.SelectedItem = BackgroundColorPresetComboBox.Items.Contains(selection) ? selection : CustomColorItem;
+        }
+        finally
+        {
+            _isLoading = previousLoading;
+        }
+    }
+
+    private static bool TryMatchPresetNameFromCss(string? cssValue, out string presetName)
+    {
+        foreach (var preset in BackgroundColorPresets)
+        {
+            if (string.Equals(preset.Css, cssValue?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                presetName = preset.Name;
+                return true;
+            }
+        }
+
+        presetName = string.Empty;
+        return false;
+    }
+
+    private void ActivateBackgroundColorPresetSource()
+    {
+        _workingSettings.BackgroundColorSourceMode = PresetColorSourceMode;
+    }
+
+    private void ActivateBackgroundColorCustomSource()
+    {
+        _workingSettings.BackgroundColorSourceMode = CustomSourceMode;
+    }
+
+    private void BackgroundColorPresetComboBox_Activated(object sender, EventArgs e)
+    {
+        if (_isLoading)
+            return;
+
+        ActivateBackgroundColorPresetSource();
+    }
+
+    private void BackgroundColorTextBox_Activated(object sender, RoutedEventArgs e)
+    {
+        if (_isLoading)
+            return;
+
+        ActivateBackgroundColorCustomSource();
+    }
 
     private void RefreshOverlayAssetComboBoxes()
     {
@@ -322,7 +461,7 @@ public partial class RecordsDisplaySettingsWindow : Window
         return value.Trim();
     }
 
-    private static void BrowseImagePathInto(TextBox target)
+    private static bool BrowseImagePathInto(TextBox target)
     {
         var dialog = new OpenFileDialog
         {
@@ -332,7 +471,81 @@ public partial class RecordsDisplaySettingsWindow : Window
         };
 
         if (dialog.ShowDialog() == true)
+        {
             target.Text = dialog.FileName;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeSourceMode(string? value, string? builtInName, string? customPath)
+    {
+        if (string.Equals(value, CustomSourceMode, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(customPath))
+            return CustomSourceMode;
+
+        if (string.Equals(value, BuiltInSourceMode, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(builtInName))
+            return BuiltInSourceMode;
+
+        if (!string.IsNullOrWhiteSpace(builtInName))
+            return BuiltInSourceMode;
+
+        if (!string.IsNullOrWhiteSpace(customPath))
+            return CustomSourceMode;
+
+        return BuiltInSourceMode;
+    }
+
+    private void ActivateBackgroundBuiltInSource()
+    {
+        _workingSettings.BackgroundSourceMode = BuiltInSourceMode;
+    }
+
+    private void ActivateBackgroundCustomSource()
+    {
+        _workingSettings.BackgroundSourceMode = CustomSourceMode;
+    }
+
+    private void ActivateFrameBuiltInSource()
+    {
+        _workingSettings.FrameSourceMode = BuiltInSourceMode;
+    }
+
+    private void ActivateFrameCustomSource()
+    {
+        _workingSettings.FrameSourceMode = CustomSourceMode;
+    }
+
+    private void BuiltInBackgroundComboBox_Activated(object sender, EventArgs e)
+    {
+        if (_isLoading)
+            return;
+
+        ActivateBackgroundBuiltInSource();
+    }
+
+    private void CustomBackgroundPathTextBox_Activated(object sender, RoutedEventArgs e)
+    {
+        if (_isLoading)
+            return;
+
+        ActivateBackgroundCustomSource();
+    }
+
+    private void BuiltInFrameComboBox_Activated(object sender, EventArgs e)
+    {
+        if (_isLoading)
+            return;
+
+        ActivateFrameBuiltInSource();
+    }
+
+    private void CustomFramePathTextBox_Activated(object sender, RoutedEventArgs e)
+    {
+        if (_isLoading)
+            return;
+
+        ActivateFrameCustomSource();
     }
 
     private void SelectedColorTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -380,11 +593,31 @@ public partial class RecordsDisplaySettingsWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift)
+            && e.Key == Key.Z)
+        {
+            if (TryRedoFocusedInput())
+                e.Handled = true;
+
+            return;
+        }
+
         if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
         {
             ApplyCurrentValues();
             e.Handled = true;
         }
+    }
+
+    private static bool TryRedoFocusedInput()
+    {
+        if (Keyboard.FocusedElement is TextBox textBox && textBox.CanRedo)
+        {
+            textBox.Redo();
+            return true;
+        }
+
+        return false;
     }
 
     private void ApplyCurrentValues()
@@ -406,6 +639,12 @@ public partial class RecordsDisplaySettingsWindow : Window
         _workingSettings.ShowCount = Math.Max(1, ParseInt(ShowCountTextBox.Text, _workingSettings.ShowCount));
         _workingSettings.TitleSize = ParseDouble(TitleSizeTextBox.Text, _workingSettings.TitleSize);
         _workingSettings.FontSize = ParseDouble(FontSizeTextBox.Text, _workingSettings.FontSize);
+        _workingSettings.MapSize = ParseDouble(MapSizeTextBox.Text, _workingSettings.MapSize);
+        _workingSettings.TitleText = TitleTextContentTextBox.Text?.Trim() ?? string.Empty;
+        _workingSettings.MapLabelText = MapLabelTextContentTextBox.Text?.Trim() ?? string.Empty;
+        _workingSettings.ShowMapName = ShowMapNameCheckBox.IsChecked == true;
+        _workingSettings.TitleAlignment = GetAlignmentSelectionOrFallback(TitleAlignmentComboBox, _workingSettings.TitleAlignment);
+        _workingSettings.MapAlignment = GetAlignmentSelectionOrFallback(MapAlignmentComboBox, _workingSettings.MapAlignment);
         _workingSettings.UseBoldText = FontWeightComboBox.SelectedIndex == 1;
         _workingSettings.TransformAnimation = TransformAnimationComboBox.SelectedItem?.ToString() ?? _workingSettings.TransformAnimation;
     }
@@ -418,6 +657,7 @@ public partial class RecordsDisplaySettingsWindow : Window
         _workingSettings.WindowHeight = ParseDouble(WindowHeightTextBox.Text, _workingSettings.WindowHeight);
         _workingSettings.TitleTextSpacing = ParseDouble(TitleTextSpacingTextBox.Text, _workingSettings.TitleTextSpacing);
         _workingSettings.VerticalSpacing = ParseDouble(VerticalSpacingTextBox.Text, _workingSettings.VerticalSpacing);
+        _workingSettings.TextMapSpacing = ParseDouble(TextMapSpacingTextBox.Text, _workingSettings.TextMapSpacing);
         _workingSettings.RankTimeSpacing = ParseDouble(RankTimeSpacingTextBox.Text, _workingSettings.RankTimeSpacing);
         _workingSettings.TimeBySpacing = ParseDouble(TimeBySpacingTextBox.Text, _workingSettings.TimeBySpacing);
     }
@@ -513,16 +753,31 @@ public partial class RecordsDisplaySettingsWindow : Window
 
     private void ApplyBackgroundSection()
     {
-        _workingSettings.BackgroundColor = string.IsNullOrWhiteSpace(BackgroundColorTextBox.Text) ? _workingSettings.BackgroundColor : BackgroundColorTextBox.Text.Trim();
+        _workingSettings.CustomBackgroundColor = string.IsNullOrWhiteSpace(BackgroundColorTextBox.Text) ? _workingSettings.CustomBackgroundColor : BackgroundColorTextBox.Text.Trim();
+        _workingSettings.BackgroundColorPresetName = NormalizeColorPresetSelection(BackgroundColorPresetComboBox.SelectedItem?.ToString()) ?? string.Empty;
+        _workingSettings.BackgroundColorSourceMode = NormalizeBackgroundColorSourceMode(_workingSettings.BackgroundColorSourceMode, _workingSettings.BackgroundColorPresetName, _workingSettings.CustomBackgroundColor);
+        if (string.Equals(_workingSettings.BackgroundColorSourceMode, PresetColorSourceMode, StringComparison.OrdinalIgnoreCase) &&
+            TryGetBackgroundColorPresetCss(_workingSettings.BackgroundColorPresetName, out string presetCss))
+        {
+            _workingSettings.BackgroundColor = presetCss;
+        }
+        else if (!string.IsNullOrWhiteSpace(_workingSettings.CustomBackgroundColor))
+        {
+            _workingSettings.BackgroundColor = _workingSettings.CustomBackgroundColor;
+        }
+
         _workingSettings.BackgroundOpacity = ParseDouble(BackgroundOpacityTextBox.Text, _workingSettings.BackgroundOpacity);
         _workingSettings.BorderRadius = ParseDouble(BorderRadiusTextBox.Text, _workingSettings.BorderRadius);
         _workingSettings.BackgroundAssetName = NormalizeAssetSelection(BuiltInBackgroundComboBox.SelectedItem?.ToString()) ?? string.Empty;
         _workingSettings.CustomBackgroundPath = CustomBackgroundPathTextBox.Text?.Trim() ?? string.Empty;
+        _workingSettings.BackgroundSourceMode = NormalizeSourceMode(_workingSettings.BackgroundSourceMode, _workingSettings.BackgroundAssetName, _workingSettings.CustomBackgroundPath);
         _workingSettings.BackgroundImageOpacity = ParseDouble(BackgroundImageOpacityTextBox.Text, _workingSettings.BackgroundImageOpacity);
         _workingSettings.BackgroundImageBorderRadius = ParseDouble(BackgroundImageBorderRadiusTextBox.Text, _workingSettings.BackgroundImageBorderRadius);
         _workingSettings.FrameAssetName = NormalizeAssetSelection(BuiltInFrameComboBox.SelectedItem?.ToString()) ?? string.Empty;
         _workingSettings.CustomFramePath = CustomFramePathTextBox.Text?.Trim() ?? string.Empty;
+        _workingSettings.FrameSourceMode = NormalizeSourceMode(_workingSettings.FrameSourceMode, _workingSettings.FrameAssetName, _workingSettings.CustomFramePath);
         _workingSettings.FrameOpacity = ParseDouble(FrameOpacityTextBox.Text, _workingSettings.FrameOpacity);
+        _workingSettings.FrameRadius = ParseDouble(FrameRadiusTextBox.Text, _workingSettings.FrameRadius);
     }
 
     private void ApplyColorSection()
@@ -539,6 +794,12 @@ public partial class RecordsDisplaySettingsWindow : Window
             ShowCountTextBox.Text = _workingSettings.ShowCount.ToString(CultureInfo.InvariantCulture);
             TitleSizeTextBox.Text = _workingSettings.TitleSize.ToString(CultureInfo.InvariantCulture);
             FontSizeTextBox.Text = _workingSettings.FontSize.ToString(CultureInfo.InvariantCulture);
+            MapSizeTextBox.Text = _workingSettings.MapSize.ToString(CultureInfo.InvariantCulture);
+            TitleTextContentTextBox.Text = _workingSettings.TitleText;
+            MapLabelTextContentTextBox.Text = _workingSettings.MapLabelText;
+            ShowMapNameCheckBox.IsChecked = _workingSettings.ShowMapName;
+            SelectAlignmentComboBoxItem(TitleAlignmentComboBox, _workingSettings.TitleAlignment);
+            SelectAlignmentComboBoxItem(MapAlignmentComboBox, _workingSettings.MapAlignment);
             FontWeightComboBox.SelectedIndex = _workingSettings.UseBoldText ? 1 : 0;
             WindowLeftTextBox.Text = _workingSettings.WindowLeft.ToString(CultureInfo.InvariantCulture);
             WindowTopTextBox.Text = _workingSettings.WindowTop.ToString(CultureInfo.InvariantCulture);
@@ -546,6 +807,7 @@ public partial class RecordsDisplaySettingsWindow : Window
             WindowHeightTextBox.Text = _workingSettings.WindowHeight.ToString(CultureInfo.InvariantCulture);
             TitleTextSpacingTextBox.Text = _workingSettings.TitleTextSpacing.ToString(CultureInfo.InvariantCulture);
             VerticalSpacingTextBox.Text = _workingSettings.VerticalSpacing.ToString(CultureInfo.InvariantCulture);
+            TextMapSpacingTextBox.Text = _workingSettings.TextMapSpacing.ToString(CultureInfo.InvariantCulture);
             RankTimeSpacingTextBox.Text = _workingSettings.RankTimeSpacing.ToString(CultureInfo.InvariantCulture);
             TimeBySpacingTextBox.Text = _workingSettings.TimeBySpacing.ToString(CultureInfo.InvariantCulture);
             TextPaddingSyncCheckBox.IsChecked = _workingSettings.TextPaddingSync;
@@ -568,14 +830,19 @@ public partial class RecordsDisplaySettingsWindow : Window
             ImagePaddingRightTextBox.Text = _workingSettings.ImagePaddingRight.ToString(CultureInfo.InvariantCulture);
             ImagePaddingTopTextBox.Text = _workingSettings.ImagePaddingTop.ToString(CultureInfo.InvariantCulture);
             ImagePaddingBottomTextBox.Text = _workingSettings.ImagePaddingBottom.ToString(CultureInfo.InvariantCulture);
-            BackgroundColorTextBox.Text = _workingSettings.BackgroundColor;
+            _workingSettings.BackgroundColorSourceMode = NormalizeBackgroundColorSourceMode(_workingSettings.BackgroundColorSourceMode, _workingSettings.BackgroundColorPresetName, _workingSettings.CustomBackgroundColor);
+            BackgroundColorTextBox.Text = string.IsNullOrWhiteSpace(_workingSettings.CustomBackgroundColor) ? _workingSettings.BackgroundColor : _workingSettings.CustomBackgroundColor;
             BackgroundOpacityTextBox.Text = _workingSettings.BackgroundOpacity.ToString(CultureInfo.InvariantCulture);
             BorderRadiusTextBox.Text = _workingSettings.BorderRadius.ToString(CultureInfo.InvariantCulture);
             BackgroundImageOpacityTextBox.Text = _workingSettings.BackgroundImageOpacity.ToString(CultureInfo.InvariantCulture);
             BackgroundImageBorderRadiusTextBox.Text = _workingSettings.BackgroundImageBorderRadius.ToString(CultureInfo.InvariantCulture);
             CustomBackgroundPathTextBox.Text = _workingSettings.CustomBackgroundPath;
             CustomFramePathTextBox.Text = _workingSettings.CustomFramePath;
+            _workingSettings.BackgroundSourceMode = NormalizeSourceMode(_workingSettings.BackgroundSourceMode, _workingSettings.BackgroundAssetName, _workingSettings.CustomBackgroundPath);
+            _workingSettings.FrameSourceMode = NormalizeSourceMode(_workingSettings.FrameSourceMode, _workingSettings.FrameAssetName, _workingSettings.CustomFramePath);
             FrameOpacityTextBox.Text = _workingSettings.FrameOpacity.ToString(CultureInfo.InvariantCulture);
+            FrameRadiusTextBox.Text = _workingSettings.FrameRadius.ToString(CultureInfo.InvariantCulture);
+            RefreshBackgroundColorPresetComboBox();
             RefreshOverlayAssetComboBoxes();
             TransformAnimationComboBox.SelectedItem = _workingSettings.TransformAnimation;
             RefreshSlotList();
@@ -939,6 +1206,31 @@ public partial class RecordsDisplaySettingsWindow : Window
         return int.TryParse(comboBox.SelectedItem?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) && value > 0
             ? value
             : null;
+    }
+
+    private static void SelectAlignmentComboBoxItem(ComboBox comboBox, string? alignment)
+    {
+        string target = string.IsNullOrWhiteSpace(alignment) ? "Alignment" : alignment.Trim();
+
+        foreach (var item in comboBox.Items)
+        {
+            if (item is ComboBoxItem comboBoxItem && string.Equals(comboBoxItem.Content?.ToString(), target, StringComparison.OrdinalIgnoreCase))
+            {
+                comboBox.SelectedItem = comboBoxItem;
+                return;
+            }
+        }
+
+        comboBox.SelectedIndex = 0;
+    }
+
+    private static string GetAlignmentSelectionOrFallback(ComboBox comboBox, string fallback)
+    {
+        string? value = (comboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+        if (string.IsNullOrWhiteSpace(value) || string.Equals(value, "Alignment", StringComparison.OrdinalIgnoreCase))
+            return fallback;
+
+        return value.Trim();
     }
 
     private static int ParseInt(string? raw, int fallback)

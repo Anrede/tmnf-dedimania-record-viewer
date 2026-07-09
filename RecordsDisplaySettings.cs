@@ -10,16 +10,26 @@ public sealed class RecordsDisplaySettings
     public int ShowCount { get; set; } = 5;
     public double TitleSize { get; set; } = 20;
     public double FontSize { get; set; } = 18;
+    public double MapSize { get; set; } = 16;
     public bool UseBoldText { get; set; } = true;
+    public string TitleText { get; set; } = "Records";
+    public string MapLabelText { get; set; } = "Map:";
+    public bool ShowMapName { get; set; } = true;
+    public string TitleAlignment { get; set; } = "Center";
+    public string MapAlignment { get; set; } = "Left";
     public double WindowLeft { get; set; } = 100;
     public double WindowTop { get; set; } = 100;
     public double WindowWidth { get; set; } = 520;
     public double WindowHeight { get; set; } = 320;
     public double TitleTextSpacing { get; set; } = 10;
     public double VerticalSpacing { get; set; } = 8;
+    public double TextMapSpacing { get; set; } = 12;
     public double RankTimeSpacing { get; set; } = 8;
     public double TimeBySpacing { get; set; } = 10;
     public string BackgroundColor { get; set; } = "rgb(18, 18, 18)";
+    public string CustomBackgroundColor { get; set; } = "rgb(18, 18, 18)";
+    public string BackgroundColorPresetName { get; set; } = string.Empty;
+    public string BackgroundColorSourceMode { get; set; } = "Custom";
     public double BackgroundOpacity { get; set; } = 0.92;
     public double BorderRadius { get; set; } = 12;
     public double BackgroundColorPadding { get; set; } = 0;
@@ -29,6 +39,7 @@ public sealed class RecordsDisplaySettings
     public double BackgroundColorPaddingBottom { get; set; } = 0;
     public bool BackgroundColorPaddingSync { get; set; } = true;
     public string BackgroundAssetName { get; set; } = string.Empty;
+    public string BackgroundSourceMode { get; set; } = "BuiltIn";
     public string CustomBackgroundPath { get; set; } = string.Empty;
     public double BackgroundImageOpacity { get; set; } = 0.72;
     public double BackgroundImageBorderRadius { get; set; } = 10;
@@ -40,8 +51,10 @@ public sealed class RecordsDisplaySettings
     public double ImagePaddingBottom { get; set; } = 18;
     public bool ImagePaddingSync { get; set; } = true;
     public string FrameAssetName { get; set; } = string.Empty;
+    public string FrameSourceMode { get; set; } = "BuiltIn";
     public string CustomFramePath { get; set; } = string.Empty;
     public double FrameOpacity { get; set; } = 1.0;
+    public double FrameRadius { get; set; } = 0;
     public double FramePadding { get; set; } = 0;
     public double FramePaddingLeft { get; set; } = 0;
     public double FramePaddingRight { get; set; } = 0;
@@ -136,12 +149,18 @@ public static class RecordDisplaySettingsHelper
         settings.ShowCount = Math.Max(1, Math.Min(50, settings.ShowCount));
         settings.TitleSize = SanitizeDouble(settings.TitleSize, 20, 6, 96);
         settings.FontSize = SanitizeDouble(settings.FontSize, 18, 6, 72);
+        settings.MapSize = SanitizeDouble(settings.MapSize, 16, 6, 72);
+        settings.TitleText ??= string.Empty;
+        settings.MapLabelText ??= string.Empty;
+        settings.TitleAlignment = NormalizeTextAlignment(settings.TitleAlignment, "Center");
+        settings.MapAlignment = NormalizeTextAlignment(settings.MapAlignment, "Left");
         settings.WindowLeft = SanitizeDouble(settings.WindowLeft, 100, 0, 10000);
         settings.WindowTop = SanitizeDouble(settings.WindowTop, 100, 0, 10000);
         settings.WindowWidth = SanitizeDouble(settings.WindowWidth, 520, 120, 5000);
         settings.WindowHeight = SanitizeDouble(settings.WindowHeight, 320, 120, 5000);
         settings.TitleTextSpacing = SanitizeDouble(settings.TitleTextSpacing, 10, 0, 100);
         settings.VerticalSpacing = SanitizeDouble(settings.VerticalSpacing, 8, 0, 100);
+        settings.TextMapSpacing = SanitizeDouble(settings.TextMapSpacing, 12, 0, 100);
         settings.RankTimeSpacing = SanitizeDouble(settings.RankTimeSpacing, 8, 0, 100);
         settings.TimeBySpacing = SanitizeDouble(settings.TimeBySpacing, 10, 0, 100);
         settings.BackgroundOpacity = SanitizeDouble(settings.BackgroundOpacity, 0.92, 0, 1);
@@ -152,6 +171,7 @@ public static class RecordDisplaySettingsHelper
         settings.BackgroundInset = SanitizeDouble(settings.BackgroundInset, 18, 0, 120);
         settings.ImagePadding = SanitizeDouble(settings.ImagePadding, 18, 0, 120);
         settings.FrameOpacity = SanitizeDouble(settings.FrameOpacity, 1, 0, 1);
+        settings.FrameRadius = SanitizeDouble(settings.FrameRadius, 0, 0, 240);
         settings.FramePadding = SanitizeDouble(settings.FramePadding, 0, -240, 240);
         settings.TextPadding = SanitizeDouble(settings.TextPadding, 18, 0, 120);
 
@@ -197,14 +217,60 @@ public static class RecordDisplaySettingsHelper
         settings.SettingsWindowHeight = SanitizeDouble(settings.SettingsWindowHeight, 560, 420, 2400);
         if (string.IsNullOrWhiteSpace(settings.BackgroundColor))
             settings.BackgroundColor = "rgb(18, 18, 18)";
+        if (string.IsNullOrWhiteSpace(settings.CustomBackgroundColor))
+            settings.CustomBackgroundColor = settings.BackgroundColor;
+        settings.BackgroundColorPresetName ??= string.Empty;
+        settings.BackgroundColorSourceMode = NormalizeColorSourceMode(settings.BackgroundColorSourceMode, settings.BackgroundColorPresetName, settings.CustomBackgroundColor);
         settings.BackgroundAssetName ??= string.Empty;
         settings.CustomBackgroundPath ??= string.Empty;
+        settings.BackgroundSourceMode = NormalizeSourceMode(settings.BackgroundSourceMode, settings.BackgroundAssetName, settings.CustomBackgroundPath);
         settings.FrameAssetName ??= string.Empty;
         settings.CustomFramePath ??= string.Empty;
+        settings.FrameSourceMode = NormalizeSourceMode(settings.FrameSourceMode, settings.FrameAssetName, settings.CustomFramePath);
         if (string.IsNullOrWhiteSpace(settings.TransformAnimation) || !RecordDisplayAnimationPresets.All.Contains(settings.TransformAnimation))
             settings.TransformAnimation = RecordDisplayAnimationPresets.Slide;
         EnsureStyleSlots(settings, Math.Max(settings.ShowCount, 20));
         return settings;
+    }
+
+    private static string NormalizeSourceMode(string? value, string? builtInName, string? customPath)
+    {
+        if (string.Equals(value, "Custom", StringComparison.OrdinalIgnoreCase))
+            return "Custom";
+
+        if (string.Equals(value, "BuiltIn", StringComparison.OrdinalIgnoreCase))
+            return "BuiltIn";
+
+        if (!string.IsNullOrWhiteSpace(customPath) && string.IsNullOrWhiteSpace(builtInName))
+            return "Custom";
+
+        return "BuiltIn";
+    }
+
+    private static string NormalizeColorSourceMode(string? value, string? presetName, string? customColor)
+    {
+        if (string.Equals(value, "Preset", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(presetName))
+            return "Preset";
+
+        if (string.Equals(value, "Custom", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(customColor))
+            return "Custom";
+
+        if (!string.IsNullOrWhiteSpace(presetName))
+            return "Preset";
+
+        return "Custom";
+    }
+
+    private static string NormalizeTextAlignment(string? value, string fallback)
+    {
+        if (string.Equals(value, "Left", StringComparison.OrdinalIgnoreCase))
+            return "Left";
+        if (string.Equals(value, "Center", StringComparison.OrdinalIgnoreCase))
+            return "Center";
+        if (string.Equals(value, "Right", StringComparison.OrdinalIgnoreCase))
+            return "Right";
+
+        return fallback;
     }
 
     private static double SanitizeDouble(double value, double fallback, double min, double max)

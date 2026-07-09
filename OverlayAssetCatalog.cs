@@ -25,12 +25,12 @@ internal static class OverlayAssetCatalog
 
     public static string? ResolveBackgroundPath(RecordsDisplaySettings settings)
     {
-        return ResolvePath(settings.CustomBackgroundPath, settings.BackgroundAssetName, BackgroundsRoot);
+        return ResolvePath(settings.CustomBackgroundPath, settings.BackgroundAssetName, BackgroundsRoot, settings.BackgroundSourceMode);
     }
 
     public static string? ResolveFramePath(RecordsDisplaySettings settings)
     {
-        return ResolvePath(settings.CustomFramePath, settings.FrameAssetName, FramesRoot);
+        return ResolvePath(settings.CustomFramePath, settings.FrameAssetName, FramesRoot, settings.FrameSourceMode);
     }
 
     public static ImageBrush? CreateImageBrush(string? absolutePath)
@@ -93,29 +93,40 @@ internal static class OverlayAssetCatalog
             .ToList()!;
     }
 
-    private static string? ResolvePath(string? customPath, string? builtInName, string folder)
+    private static string? ResolvePath(string? customPath, string? builtInName, string folder, string? sourceMode)
     {
-        if (!string.IsNullOrWhiteSpace(customPath))
-        {
-            try
-            {
-                string fullCustom = Path.GetFullPath(customPath);
-                if (File.Exists(fullCustom))
-                    return fullCustom;
-            }
-            catch
-            {
-            }
-        }
+        bool preferCustom = string.Equals(sourceMode, "Custom", StringComparison.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrWhiteSpace(builtInName))
+        return preferCustom
+            ? TryResolveCustom(customPath) ?? TryResolveBuiltIn(builtInName, folder)
+            : TryResolveBuiltIn(builtInName, folder) ?? TryResolveCustom(customPath);
+    }
+
+    private static string? TryResolveCustom(string? customPath)
+    {
+        if (string.IsNullOrWhiteSpace(customPath))
+            return null;
+
+        try
         {
-            string builtIn = Path.Combine(folder, builtInName);
-            if (File.Exists(builtIn))
-                return builtIn;
+            string fullCustom = Path.GetFullPath(customPath);
+            if (File.Exists(fullCustom))
+                return fullCustom;
+        }
+        catch
+        {
         }
 
         return null;
+    }
+
+    private static string? TryResolveBuiltIn(string? builtInName, string folder)
+    {
+        if (string.IsNullOrWhiteSpace(builtInName))
+            return null;
+
+        string builtIn = Path.Combine(folder, builtInName);
+        return File.Exists(builtIn) ? builtIn : null;
     }
 
     private static bool IsSupportedImage(string path)
