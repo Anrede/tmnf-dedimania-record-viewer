@@ -6,7 +6,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:local="clr-namespace:TmnfDedimaniaScraper"
         mc:Ignorable="d"
-        Title="TMNF Dedimania Online Records Scraper"
+        Title="TMNF Record Controls" Icon="pack://application:,,,/Assets/f1_app_icon.ico"
         Width="1680"
         Height="1080"
         WindowStartupLocation="CenterScreen"
@@ -210,20 +210,20 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <Button Grid.Column="0" x:Name="BackButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,8,0" Click="BackButton_Click" ToolTip="Önceki sayfa" Content="←"/>
-                    <Button Grid.Column="1" x:Name="ForwardButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,8,0" Click="ForwardButton_Click" ToolTip="Sonraki sayfa" Content="→"/>
-                    <Button Grid.Column="2" x:Name="ReloadButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,10,0" Click="ReloadButton_Click" ToolTip="Yenile" Content="↻"/>
+                    <Button Grid.Column="0" x:Name="BackButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,8,0" Click="BackButton_Click" ToolTip="Back" Content="←"/>
+                    <Button Grid.Column="1" x:Name="ForwardButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,8,0" Click="ForwardButton_Click" ToolTip="Forward" Content="→"/>
+                    <Button Grid.Column="2" x:Name="ReloadButton" Style="{StaticResource ChromeNavButtonStyle}" Margin="0,0,10,0" Click="ReloadButton_Click" ToolTip="Reload" Content="↻"/>
 
                     <TextBox x:Name="UrlTextBox" Grid.Column="3" Margin="0,0,10,0" Padding="12,8" FontSize="14" KeyDown="UrlTextBox_KeyDown" Text="https://tmnf.exchange/trackshow/9684537"/>
-                    <Button Grid.Column="4" x:Name="LoadButton" Width="110" Height="38" Margin="0,0,8,0" Click="LoadButton_Click" Content="Siteyi Aç"/>
-                    <Button Grid.Column="5" x:Name="ScrapeButton" Width="120" Height="38" Margin="0,0,8,0" Click="ScrapeButton_Click" Content="Veriyi Çek"/>
-                    <Button Grid.Column="6" x:Name="AddBookmarkButton" Width="90" Height="38" Margin="0,0,8,0" Click="AddBookmarkButton_Click" Content="☆ Kaydet"/>
-                    <Button Grid.Column="7" x:Name="RemoveBookmarkButton" Width="74" Height="38" Click="RemoveBookmarkButton_Click" Content="✕ Sil"/>
+                    <Button Grid.Column="4" x:Name="LoadButton" Width="110" Height="38" Margin="0,0,8,0" Click="LoadButton_Click" Content="Open Site"/>
+                    <Button Grid.Column="5" x:Name="ScrapeButton" Width="120" Height="38" Margin="0,0,8,0" Click="ScrapeButton_Click" Content="Fetch Data"/>
+                    <Button Grid.Column="6" x:Name="AddBookmarkButton" Width="90" Height="38" Margin="0,0,8,0" Click="AddBookmarkButton_Click" Content="☆ Save"/>
+                    <Button Grid.Column="7" x:Name="RemoveBookmarkButton" Width="74" Height="38" Click="RemoveBookmarkButton_Click" Content="✕ Remove"/>
                 </Grid>
 
                 <Border Grid.Row="1" Margin="0,10,0,0" Background="#111827" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10,8">
                     <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#93C5FD" Text="Yer İmleri"/>
+                        <TextBlock DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#93C5FD" Text="Bookmarks"/>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="True">
                             <ItemsControl x:Name="BookmarksItemsControl">
                                 <ItemsControl.ItemsPanel>
@@ -296,7 +296,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="Segment detayları" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock Text="Segment details" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
 
                         <Grid Grid.Column="2" HorizontalAlignment="Right">
                             <Grid.ColumnDefinitions>
@@ -328,8 +328,8 @@
                                 </Button.ContextMenu>
                             </Button>
 
-                            <TextBlock Grid.Column="3" Text="Renk" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Border Grid.Column="4" x:Name="SelectedColorPreviewBorder" Height="28" Cursor="Hand" CornerRadius="6" BorderBrush="#475569" BorderThickness="1" Background="Transparent" ToolTip="Tıkla, renk skalası açılsın" MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
+                            <TextBlock Grid.Column="3" Text="Color" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Border Grid.Column="4" x:Name="SelectedColorPreviewBorder" Height="28" Cursor="Hand" CornerRadius="6" BorderBrush="#475569" BorderThickness="1" Background="Transparent" ToolTip="Click to open the color picker" MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
 
                             <TextBlock Grid.Column="6" Text="R" VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBox Grid.Column="7" x:Name="RedTextBox" Height="28"/>
@@ -337,14 +337,14 @@
                             <TextBox Grid.Column="10" x:Name="GreenTextBox" Height="28"/>
                             <TextBlock Grid.Column="12" Text="B" VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBox Grid.Column="13" x:Name="BlueTextBox" Height="28"/>
-                            <Button Grid.Column="15" x:Name="ApplyRgbButton" Width="88" Height="28" Click="ApplyRgbButton_Click" Content="RGB Uygula"/>
+                            <Button Grid.Column="15" x:Name="ApplyRgbButton" Width="88" Height="28" Click="ApplyRgbButton_Click" Content="Apply RGB"/>
                         </Grid>
                     </Grid>
 
                     <DataGrid Grid.Row="1" x:Name="SegmentsGrid" AutoGenerateColumns="False" CanUserSortColumns="False" SelectionChanged="SegmentsGrid_SelectionChanged" BeginningEdit="SegmentsGrid_BeginningEdit">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="72" IsReadOnly="True"/>
-                            <DataGridTemplateColumn Header="Renk" Width="50">
+                            <DataGridTextColumn Header="Field" Binding="{Binding CellName}" Width="72" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="Swatch" Width="50">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Border Width="20" Height="20" CornerRadius="5" BorderBrush="#64748B" BorderThickness="1" Background="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -414,7 +414,7 @@
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                     <Button x:Name="OnlineTabButton" Style="{StaticResource SecondaryButtonStyle}" Width="76" Height="28" Padding="0" Margin="0,0,6,0" Click="OnlineTabButton_Click" Content="Online"/>
                                     <Button x:Name="OfflineTabButton" Style="{StaticResource SecondaryButtonStyle}" Width="76" Height="28" Padding="0" Margin="0,0,6,0" Click="OfflineTabButton_Click" Content="Offline"/>
-                                    <Button x:Name="MergeOfflineButton" Style="{StaticResource SecondaryButtonStyle}" Width="88" Height="28" Padding="0" Click="MergeOfflineButton_Click" Content="Birleştir" IsEnabled="False"/>
+                                    <Button x:Name="MergeOfflineButton" Style="{StaticResource SecondaryButtonStyle}" Width="88" Height="28" Padding="0" Click="MergeOfflineButton_Click" Content="Merge" IsEnabled="False"/>
                                 </StackPanel>
                                 <Button x:Name="RecordsMenuButton" DockPanel.Dock="Left" Style="{StaticResource SecondaryButtonStyle}" Width="30" Height="26" Padding="0" Margin="0,0,8,0" Click="RecordsMenuButton_Click" Content="▾">
                                     <Button.ContextMenu>
@@ -424,7 +424,7 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <TextBlock DockPanel.Dock="Left" Text="Çekilen kayıtlar" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock DockPanel.Dock="Left" Text="Fetched records" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <TextBlock x:Name="TrackNameHeaderText" DockPanel.Dock="Left" Text="  •  -" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}" VerticalAlignment="Center"/>
                             </DockPanel>
 
@@ -468,7 +468,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Text="Yeni tablolar (Rank / Time / By)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="0" Text="Custom tables" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
                             <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
@@ -494,7 +494,7 @@
                                                     </ContextMenu>
                                                 </Button.ContextMenu>
                                             </Button>
-                                            <TextBlock Text="Tablo 1" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Table 1" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
                                         </StackPanel>
 
                                         <Grid Grid.Row="1" Margin="0,0,0,8">
@@ -503,9 +503,9 @@
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
-                                            <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable1ItemButton_Click" Content="Ekle"/>
-                                            <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Seçileni Sil"/>
+                                            <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Enter the insert position: 1, 2, 3..."/>
+                                            <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable1ItemButton_Click" Content="Add"/>
+                                            <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Remove Selected"/>
                                         </Grid>
 
                                         <DataGrid Grid.Row="2" x:Name="Table1Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table1Grid_SelectionChanged">
@@ -535,7 +535,7 @@
                                                     </ContextMenu>
                                                 </Button.ContextMenu>
                                             </Button>
-                                            <TextBlock Text="Tablo 2" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Table 2" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
                                         </StackPanel>
 
                                         <Grid Grid.Row="1" Margin="0,0,0,8">
@@ -544,9 +544,9 @@
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
-                                            <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable2ItemButton_Click" Content="Ekle"/>
-                                            <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Seçileni Sil"/>
+                                            <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Enter the insert position: 1, 2, 3..."/>
+                                            <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable2ItemButton_Click" Content="Add"/>
+                                            <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Remove Selected"/>
                                         </Grid>
 
                                         <DataGrid Grid.Row="2" x:Name="Table2Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="Table2Grid_SelectionChanged">
@@ -578,7 +578,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Text="Görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Text="Preview" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
                             <DataGrid Grid.Row="1" x:Name="PreviewGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" SelectionMode="Single" SelectionUnit="FullRow">
                                 <DataGrid.Columns>
                                     <DataGridTemplateColumn x:Name="PreviewRankColumn" Header="#" Width="90">
@@ -696,7 +696,7 @@
         </Grid>
         <StatusBar Grid.Row="2" Background="#0B1220" Foreground="{StaticResource ForegroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" Margin="0,12,0,0">
             <StatusBarItem>
-                <TextBlock x:Name="StatusText" Text="Hazır"/>
+                <TextBlock x:Name="StatusText" Text="Ready"/>
             </StatusBarItem>
         </StatusBar>
     </Grid>

@@ -206,7 +206,7 @@ public partial class MainWindow : Window
         _redoStack.Push(current);
         var previous = _undoStack.Pop();
         RestoreUndoRedoState(previous);
-        StatusText.Text = "Son değişiklik geri alındı.";
+        StatusText.Text = "Last change undone.";
     }
 
     private void RedoLastChange()
@@ -218,7 +218,7 @@ public partial class MainWindow : Window
         _undoStack.Push(current);
         var next = _redoStack.Pop();
         RestoreUndoRedoState(next);
-        StatusText.Text = "Geri alınan değişiklik yeniden uygulandı.";
+        StatusText.Text = "Last undone change restored.";
     }
 
     private void RestoreUndoRedoState(AppState state)
@@ -309,7 +309,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Durum yüklenemedi: {ex.Message}";
+            StatusText.Text = $"Failed to load state: {ex.Message}";
             return null;
         }
     }
@@ -431,7 +431,7 @@ public partial class MainWindow : Window
             EnsureEditableSegments(record.Rank);
             EnsureEditableSegments(record.Time);
             EnsureEditableSegments(record.By);
-            _table1Rows.Add(new RankTimeByRowView(record, "Tablo 1"));
+            _table1Rows.Add(new RankTimeByRowView(record, "Table 1"));
         }
 
         foreach (var record in state.Table2Rows.Select(OnlineRecordCloner.CloneRankTimeByRecord))
@@ -439,7 +439,7 @@ public partial class MainWindow : Window
             EnsureEditableSegments(record.Rank);
             EnsureEditableSegments(record.Time);
             EnsureEditableSegments(record.By);
-            _table2Rows.Add(new RankTimeByRowView(record, "Tablo 2"));
+            _table2Rows.Add(new RankTimeByRowView(record, "Table 2"));
         }
 
         RenumberCustomTable(_table1Rows);
@@ -729,7 +729,7 @@ public partial class MainWindow : Window
 
     private async Task InitializeBrowserAsync()
     {
-        StatusText.Text = "WebView2 başlatılıyor...";
+        StatusText.Text = "Initializing WebView2...";
         await Browser.EnsureCoreWebView2Async();
         Browser.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
         Browser.CoreWebView2.HistoryChanged += CoreWebView2_HistoryChanged;
@@ -738,14 +738,14 @@ public partial class MainWindow : Window
         Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
         Browser.CoreWebView2.Settings.IsStatusBarEnabled = true;
         UpdateNavigationButtons();
-        StatusText.Text = "WebView2 hazır.";
+        StatusText.Text = "WebView2 ready.";
     }
 
     private void CoreWebView2_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         _pageReady = e.IsSuccess;
         UpdateNavigationButtons();
-        StatusText.Text = e.IsSuccess ? "Sayfa yüklendi." : "Sayfa yüklenemedi.";
+        StatusText.Text = e.IsSuccess ? "Page loaded." : "Page failed to load.";
     }
 
     private void CoreWebView2_HistoryChanged(object? sender, object e)
@@ -794,7 +794,7 @@ public partial class MainWindow : Window
         string normalizedUrl = NormalizeUrl(url);
         _pageReady = false;
         UrlTextBox.Text = normalizedUrl;
-        StatusText.Text = "Sayfa açılıyor...";
+        StatusText.Text = "Opening page...";
         Browser.CoreWebView2.Navigate(normalizedUrl);
         await Task.CompletedTask;
     }
@@ -817,7 +817,7 @@ public partial class MainWindow : Window
             return;
 
         _pageReady = false;
-        StatusText.Text = "Sayfa yenileniyor...";
+        StatusText.Text = "Reloading page...";
         Browser.CoreWebView2.Reload();
     }
 
@@ -835,14 +835,14 @@ public partial class MainWindow : Window
         {
             if (Browser.CoreWebView2 is null)
             {
-                MessageBox.Show("WebView2 henüz hazır değil.");
+                MessageBox.Show("WebView2 is not ready yet.");
                 return;
             }
 
             ScrapeButton.IsEnabled = false;
             PushUndoSnapshot();
             ClearCurrentResults();
-            StatusText.Text = "Online / Offline records bölümü aranıyor (maks. 3 sn)...";
+            StatusText.Text = "Searching for online/offline records (max 3 seconds)...";
 
             var extraction = await TryExtractAsync(TimeSpan.FromSeconds(3));
             _lastExtraction = extraction;
@@ -855,15 +855,15 @@ public partial class MainWindow : Window
                 ResetPreview();
 
             StatusText.Text = extraction.Success
-                ? $"Online: {extraction.Records.Count}, Offline: {extraction.OfflineRecords.Count} kayıt çekildi."
-                : $"Sonuç yok: {extraction.Message}";
+                ? $"Fetched Online: {extraction.Records.Count}, Offline: {extraction.OfflineRecords.Count}."
+                : $"No results: {extraction.Message}";
 
             QueueSaveState();
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Veri çekme sırasında hata oluştu.";
-            MessageBox.Show(ex.ToString(), "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusText.Text = "An error occurred while fetching data.";
+            MessageBox.Show(ex.ToString(), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -892,7 +892,7 @@ public partial class MainWindow : Window
         return new ExtractionResult
         {
             Success = false,
-            Message = "3 saniye içinde online/offline records tablosu bulunamadı. Track için kayıt olmayabilir veya sayfa yapısı değişmiş olabilir."
+            Message = "Could not find the online/offline records table within 3 seconds. The track may not have records, or the page structure may have changed."
         };
     }
 
@@ -902,11 +902,11 @@ public partial class MainWindow : Window
         {
             string rawJson = await Browser.ExecuteScriptAsync(JsExtractionScript);
             return JsonSerializer.Deserialize<ExtractionResult>(rawJson, JsonOptions)
-                   ?? new ExtractionResult { Success = false, Message = "Online JavaScript sonucu çözümlenemedi." };
+                   ?? new ExtractionResult { Success = false, Message = "Could not parse the online JavaScript result." };
         }
         catch (Exception ex)
         {
-            return new ExtractionResult { Success = false, Message = $"Online script hatası: {ex.Message}" };
+            return new ExtractionResult { Success = false, Message = $"Online script error: {ex.Message}" };
         }
     }
 
@@ -916,11 +916,11 @@ public partial class MainWindow : Window
         {
             string rawJson = await Browser.ExecuteScriptAsync(JsOfflineExtractionScript);
             return JsonSerializer.Deserialize<OfflineExtractionResult>(rawJson, JsonOptions)
-                   ?? new OfflineExtractionResult { Success = false, Message = "Offline JavaScript sonucu çözümlenemedi." };
+                   ?? new OfflineExtractionResult { Success = false, Message = "Could not parse the offline JavaScript result." };
         }
         catch (Exception ex)
         {
-            return new OfflineExtractionResult { Success = false, Message = $"Offline script hatası: {ex.Message}" };
+            return new OfflineExtractionResult { Success = false, Message = $"Offline script error: {ex.Message}" };
         }
     }
 
@@ -1025,8 +1025,8 @@ public partial class MainWindow : Window
 
         foreach (var record in onlineRecords.Select(OnlineRecordCloner.CloneRankTimeByRecord))
         {
-            _table1Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Tablo 1"));
-            _table2Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Tablo 2"));
+            _table1Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Table 1"));
+            _table2Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Table 2"));
         }
 
         RenumberCustomTable(_table1Rows);
@@ -1037,26 +1037,26 @@ public partial class MainWindow : Window
     {
         if (_lastExtraction is null)
         {
-            MessageBox.Show("Önce verileri çek.");
+            MessageBox.Show("Fetch the data first.");
             return;
         }
 
         if ((_lastExtraction.OfflineRecords?.Count ?? 0) == 0)
         {
-            MessageBox.Show("Birleştirilecek offline kayıt bulunamadı.");
+            MessageBox.Show("No offline records were found to merge.");
             return;
         }
 
         PushUndoSnapshot();
-        ReplaceCustomTableWithMergedData(_table1Rows, "Tablo 1");
-        ReplaceCustomTableWithMergedData(_table2Rows, "Tablo 2");
+        ReplaceCustomTableWithMergedData(_table1Rows, "Table 1");
+        ReplaceCustomTableWithMergedData(_table2Rows, "Table 2");
 
         if (_table1Rows.Count > 0 && Table1Grid.SelectedIndex < 0)
             Table1Grid.SelectedIndex = 0;
         if (_table2Rows.Count > 0 && Table2Grid.SelectedIndex < 0)
             Table2Grid.SelectedIndex = 0;
 
-        StatusText.Text = $"Offline kayıtlar Tablo 1 ve Tablo 2 ile birleştirildi ({_lastExtraction.OfflineRecords.Count} offline).";
+        StatusText.Text = $"Offline records merged into Table 1 and Table 2 ({_lastExtraction.OfflineRecords.Count} offline).";
         QueueSaveState();
     }
 
@@ -1432,9 +1432,10 @@ public partial class MainWindow : Window
     private void UpdatePreviewColumnsVisibility()
     {
         bool showOfflineColumns = _currentSelectionSource == SelectionSource.OfflineRecord;
+        bool showModeAndServerColumns = _currentSelectionSource == SelectionSource.FullRecord;
 
-        if (PreviewModeColumn is not null) PreviewModeColumn.Visibility = showOfflineColumns ? Visibility.Collapsed : Visibility.Visible;
-        if (PreviewServerColumn is not null) PreviewServerColumn.Visibility = showOfflineColumns ? Visibility.Collapsed : Visibility.Visible;
+        if (PreviewModeColumn is not null) PreviewModeColumn.Visibility = showModeAndServerColumns ? Visibility.Visible : Visibility.Collapsed;
+        if (PreviewServerColumn is not null) PreviewServerColumn.Visibility = showModeAndServerColumns ? Visibility.Visible : Visibility.Collapsed;
         if (PreviewScoreColumn is not null) PreviewScoreColumn.Visibility = showOfflineColumns ? Visibility.Visible : Visibility.Collapsed;
         if (PreviewLBColumn is not null) PreviewLBColumn.Visibility = showOfflineColumns ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -1602,7 +1603,7 @@ public partial class MainWindow : Window
         {
             var chosen = Color.FromRgb(dialog.Color.R, dialog.Color.G, dialog.Color.B);
             SetPendingEditorColor(chosen, true);
-            StatusText.Text = "Renk seçildi. Uygulamak için RGB Uygula butonuna bas.";
+            StatusText.Text = "Color selected. Click Apply RGB to apply it.";
         }
     }
 
@@ -1610,13 +1611,13 @@ public partial class MainWindow : Window
     {
         if (_currentSelectedSegment is null)
         {
-            MessageBox.Show("Önce bir segment seç.");
+            MessageBox.Show("Select a segment first.");
             return;
         }
 
         if (!TryReadRgb(out byte r, out byte g, out byte b))
         {
-            MessageBox.Show("RGB alanlarına 0 ile 255 arasında sayılar gir.");
+            MessageBox.Show("Enter RGB values between 0 and 255.");
             return;
         }
 
@@ -1692,7 +1693,7 @@ public partial class MainWindow : Window
     {
         _currentTrackName = (trackName ?? string.Empty).Trim();
         TrackNameHeaderText.Text = string.IsNullOrWhiteSpace(_currentTrackName)
-            ? "  •  Harita adı bulunamadı"
+            ? "  •  Track name not found"
             : $"  •  {_currentTrackName}";
 
         QueueSaveState();
@@ -1711,7 +1712,7 @@ public partial class MainWindow : Window
         string url = GetCurrentUrl();
         if (string.IsNullOrWhiteSpace(url))
         {
-            MessageBox.Show("Kaydedilecek bir URL bulunamadı.");
+            MessageBox.Show("There is no URL to save.");
             return;
         }
 
@@ -1724,14 +1725,14 @@ public partial class MainWindow : Window
             existing.Title = title;
             SaveBookmarks();
             RefreshBookmarksBar();
-            StatusText.Text = "Yer imi zaten vardı, başlığı güncellendi.";
+            StatusText.Text = "Bookmark already existed; its title was updated.";
             QueueSaveState();
             return;
         }
 
         _bookmarks.Add(new BookmarkItem { Title = title, Url = normalizedUrl });
         SaveBookmarks();
-        StatusText.Text = $"Yer imi kaydedildi: {title}";
+        StatusText.Text = $"Bookmark saved: {title}";
         QueueSaveState();
     }
 
@@ -1742,13 +1743,13 @@ public partial class MainWindow : Window
 
         if (existing is null)
         {
-            MessageBox.Show("Bu URL için kayıtlı bir yer imi bulunamadı.");
+            MessageBox.Show("No saved bookmark was found for this URL.");
             return;
         }
 
         _bookmarks.Remove(existing);
         SaveBookmarks();
-        StatusText.Text = $"Yer imi silindi: {existing.Title}";
+        StatusText.Text = $"Bookmark removed: {existing.Title}";
         QueueSaveState();
     }
 
@@ -1807,7 +1808,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Yer imleri yüklenemedi: {ex.Message}";
+            StatusText.Text = $"Bookmarks could not be loaded: {ex.Message}";
         }
     }
 
@@ -1852,22 +1853,22 @@ public partial class MainWindow : Window
 
     private void ExportTable1MenuItem_Click(object sender, RoutedEventArgs e)
     {
-        ExportCustomTable(_table1Rows, 1, "Tablo 1");
+        ExportCustomTable(_table1Rows, 1, "Table 1");
     }
 
     private void ExportTable2MenuItem_Click(object sender, RoutedEventArgs e)
     {
-        ExportCustomTable(_table2Rows, 2, "Tablo 2");
+        ExportCustomTable(_table2Rows, 2, "Table 2");
     }
 
     private void ImportTable1MenuItem_Click(object sender, RoutedEventArgs e)
     {
-        ImportCustomTable(_table1Rows, Table1Grid, 1, "Tablo 1", SelectionSource.Table1);
+        ImportCustomTable(_table1Rows, Table1Grid, 1, "Table 1", SelectionSource.Table1);
     }
 
     private void ImportTable2MenuItem_Click(object sender, RoutedEventArgs e)
     {
-        ImportCustomTable(_table2Rows, Table2Grid, 2, "Tablo 2", SelectionSource.Table2);
+        ImportCustomTable(_table2Rows, Table2Grid, 2, "Table 2", SelectionSource.Table2);
     }
 
     private void ExportRecordsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -1884,14 +1885,14 @@ public partial class MainWindow : Window
     {
         if (_rows.Count == 0)
         {
-            MessageBox.Show("Çekilen kayıtlar boş olduğu için dışa aktarılamaz.");
+            MessageBox.Show("Fetched records cannot be exported because the table is empty.");
             return;
         }
 
         string safeTrackName = GetSafeTrackNameForFileName();
         var dialog = new SaveFileDialog
         {
-            Title = "Çekilen kayıtları dışa aktar",
+            Title = "Export fetched records",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
             FileName = $"{safeTrackName} - records.txt",
             InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
@@ -1907,14 +1908,14 @@ public partial class MainWindow : Window
         var payload = new TableFilePayload
         {
             TrackName = _currentTrackName,
-            TableName = "Çekilen kayıtlar",
+            TableName = "Fetched records",
             ExportedAt = DateTime.Now,
             Rows = _rows.Select(r => OnlineRecordCloner.CloneFullRecord(r.Source)).ToList()
         };
 
         Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName)!);
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(payload, JsonOptions));
-        StatusText.Text = $"Çekilen kayıtlar dışa aktarıldı: {Path.GetFileName(dialog.FileName)}";
+        StatusText.Text = $"Fetched records exported: {Path.GetFileName(dialog.FileName)}";
         QueueSaveState();
     }
 
@@ -1923,7 +1924,7 @@ public partial class MainWindow : Window
         string safeTrackName = GetSafeTrackNameForFileName();
         var dialog = new OpenFileDialog
         {
-            Title = "Çekilen kayıtları içe aktar",
+            Title = "Import fetched records",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
             FileName = $"{safeTrackName} - records.txt",
             InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
@@ -1956,7 +1957,7 @@ public partial class MainWindow : Window
             var extraction = new ExtractionResult
             {
                 Success = rows.Count > 0,
-                Message = rows.Count > 0 ? "İçe aktarıldı" : "Dosyada kayıt bulunamadı",
+                Message = rows.Count > 0 ? "Imported" : "No records found in file",
                 TrackName = importedTrackName,
                 RecordCount = rows.Count,
                 Records = rows.Select(OnlineRecordCloner.CloneFullRecord).ToList()
@@ -1971,12 +1972,12 @@ public partial class MainWindow : Window
             else
                 ResetPreview();
 
-            StatusText.Text = $"Çekilen kayıtlar içe aktarıldı: {Path.GetFileName(dialog.FileName)}";
+            StatusText.Text = $"Fetched records imported: {Path.GetFileName(dialog.FileName)}";
             QueueSaveState();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"İçe aktarma başarısız:\n{ex.Message}", "İçe Aktarma Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Import failed:\n{ex.Message}", "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -1984,14 +1985,14 @@ public partial class MainWindow : Window
     {
         if (rows.Count == 0)
         {
-            MessageBox.Show($"{tableName} boş olduğu için dışa aktarılamaz.");
+            MessageBox.Show($"{tableName} cannot be exported because it is empty.");
             return;
         }
 
         string safeTrackName = GetSafeTrackNameForFileName();
         var dialog = new SaveFileDialog
         {
-            Title = $"{tableName} dışa aktar",
+            Title = $"Export {tableName}",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
             FileName = $"{safeTrackName} - table{tableNumber}.txt",
             InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
@@ -2004,17 +2005,17 @@ public partial class MainWindow : Window
 
         _lastImportExportDirectory = NormalizeExistingDirectory(Path.GetDirectoryName(dialog.FileName));
 
-        var payload = new TableFilePayload
+        var payload = new CompactTableFilePayload
         {
             TrackName = _currentTrackName,
             TableName = tableName,
             ExportedAt = DateTime.Now,
-            Rows = rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList()
+            Rows = rows.Select(r => CompactRankTimeByRecord.FromRecord(r.Source)).ToList()
         };
 
         Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName)!);
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(payload, JsonOptions));
-        StatusText.Text = $"{tableName} dışa aktarıldı: {Path.GetFileName(dialog.FileName)}";
+        StatusText.Text = $"{tableName} exported: {Path.GetFileName(dialog.FileName)}";
         QueueSaveState();
     }
 
@@ -2023,7 +2024,7 @@ public partial class MainWindow : Window
         string safeTrackName = GetSafeTrackNameForFileName();
         var dialog = new OpenFileDialog
         {
-            Title = $"{tableName} içe aktar",
+            Title = $"Import {tableName}",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
             FileName = $"{safeTrackName} - table{tableNumber}.txt",
             InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
@@ -2042,15 +2043,24 @@ public partial class MainWindow : Window
             List<OnlineRecord> rows;
             string importedTrackName = string.Empty;
 
-            var payload = JsonSerializer.Deserialize<TableFilePayload>(json, JsonOptions);
-            if (payload?.Rows?.Count > 0)
+            var compactPayload = JsonSerializer.Deserialize<CompactTableFilePayload>(json, JsonOptions);
+            if (compactPayload?.Rows?.Count > 0)
             {
-                rows = payload.Rows;
-                importedTrackName = payload.TrackName ?? string.Empty;
+                rows = compactPayload.Rows.Select(r => r.ToOnlineRecord()).ToList();
+                importedTrackName = compactPayload.TrackName ?? string.Empty;
             }
             else
             {
-                rows = JsonSerializer.Deserialize<List<OnlineRecord>>(json, JsonOptions) ?? new List<OnlineRecord>();
+                var payload = JsonSerializer.Deserialize<TableFilePayload>(json, JsonOptions);
+                if (payload?.Rows?.Count > 0)
+                {
+                    rows = payload.Rows;
+                    importedTrackName = payload.TrackName ?? string.Empty;
+                }
+                else
+                {
+                    rows = JsonSerializer.Deserialize<List<OnlineRecord>>(json, JsonOptions) ?? new List<OnlineRecord>();
+                }
             }
 
             target.Clear();
@@ -2082,12 +2092,12 @@ public partial class MainWindow : Window
                 ResetSelectedSegmentEditor();
             }
 
-            StatusText.Text = $"{tableName} içe aktarıldı: {Path.GetFileName(dialog.FileName)}";
+            StatusText.Text = $"{tableName} imported: {Path.GetFileName(dialog.FileName)}";
             QueueSaveState();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"İçe aktarma başarısız:\n{ex.Message}", "İçe Aktarma Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Import failed:\n{ex.Message}", "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -2101,12 +2111,12 @@ public partial class MainWindow : Window
 
     private void AddTable1ItemButton_Click(object sender, RoutedEventArgs e)
     {
-        InsertBlankRowIntoCustomTable(Table1RankInput.Text, _table1Rows, Table1Grid, "Tablo 1");
+        InsertBlankRowIntoCustomTable(Table1RankInput.Text, _table1Rows, Table1Grid, "Table 1");
     }
 
     private void AddTable2ItemButton_Click(object sender, RoutedEventArgs e)
     {
-        InsertBlankRowIntoCustomTable(Table2RankInput.Text, _table2Rows, Table2Grid, "Tablo 2");
+        InsertBlankRowIntoCustomTable(Table2RankInput.Text, _table2Rows, Table2Grid, "Table 2");
     }
 
     private void InsertBlankRowIntoCustomTable(string rankInput, ObservableCollection<RankTimeByRowView> target, DataGrid targetGrid, string tableName)
@@ -2114,7 +2124,7 @@ public partial class MainWindow : Window
         int? requestedPosition = RankParsingHelper.ParseRankNumber(rankInput);
         if (requestedPosition is null)
         {
-            MessageBox.Show("Ekleme konumu için 1, 2, 3 gibi bir değer gir.");
+            MessageBox.Show("Enter an insert position such as 1, 2, or 3.");
             return;
         }
 
@@ -2126,25 +2136,25 @@ public partial class MainWindow : Window
         RenumberCustomTable(target);
 
         targetGrid.SelectedIndex = insertIndex;
-        StatusText.Text = $"{tableName} listesine {insertIndex + 1}. sıraya boş kayıt eklendi.";
+        StatusText.Text = $"A blank record was added to {tableName} at position {insertIndex + 1}.";
         QueueSaveState();
     }
 
     private void RemoveTable1ItemButton_Click(object sender, RoutedEventArgs e)
     {
-        RemoveSelectedCustomRow(_table1Rows, Table1Grid, SelectionSource.Table1, "Tablo 1");
+        RemoveSelectedCustomRow(_table1Rows, Table1Grid, SelectionSource.Table1, "Table 1");
     }
 
     private void RemoveTable2ItemButton_Click(object sender, RoutedEventArgs e)
     {
-        RemoveSelectedCustomRow(_table2Rows, Table2Grid, SelectionSource.Table2, "Tablo 2");
+        RemoveSelectedCustomRow(_table2Rows, Table2Grid, SelectionSource.Table2, "Table 2");
     }
 
     private void RemoveSelectedCustomRow(ObservableCollection<RankTimeByRowView> target, DataGrid grid, SelectionSource source, string tableName)
     {
         if (grid.SelectedItem is not RankTimeByRowView selected)
         {
-            MessageBox.Show("Silmek için önce tablodan bir satır seç.");
+            MessageBox.Show("Select a row in the table first.");
             return;
         }
 
@@ -2173,7 +2183,7 @@ public partial class MainWindow : Window
             }
         }
 
-        StatusText.Text = $"{tableName} listesinden satır silindi.";
+        StatusText.Text = $"A row was removed from {tableName}.";
         QueueSaveState();
     }
 
@@ -2455,7 +2465,7 @@ public partial class MainWindow : Window
 
     return {
         success: records.length > 0,
-        message: records.length > 0 ? `Bulundu (${source})` : 'Tablo bulunamadı',
+        message: records.length > 0 ? `Found (${source})` : 'Table not found',
         trackName: findTrackName(),
         recordCount: records.length,
         records
@@ -2698,7 +2708,7 @@ public partial class MainWindow : Window
 
     return {
         success: records.length > 0,
-        message: records.length > 0 ? `Bulundu (${source})` : 'Offline tablo bulunamadı',
+        message: records.length > 0 ? `Found (${source})` : 'Offline table not found',
         trackName: findTrackName(),
         recordCount: records.length,
         records
@@ -3238,6 +3248,43 @@ public sealed class TableFilePayload
     public string TableName { get; set; } = string.Empty;
     public DateTime ExportedAt { get; set; }
     public List<OnlineRecord> Rows { get; set; } = new();
+}
+
+public sealed class CompactTableFilePayload
+{
+    public string TrackName { get; set; } = string.Empty;
+    public string TableName { get; set; } = string.Empty;
+    public DateTime ExportedAt { get; set; }
+    public List<CompactRankTimeByRecord> Rows { get; set; } = new();
+}
+
+public sealed class CompactRankTimeByRecord
+{
+    public CellData Rank { get; set; } = new();
+    public CellData Time { get; set; } = new();
+    public CellData By { get; set; } = new();
+
+    public static CompactRankTimeByRecord FromRecord(OnlineRecord source)
+    {
+        return new CompactRankTimeByRecord
+        {
+            Rank = OnlineRecordCloner.CloneCell(source.Rank),
+            Time = OnlineRecordCloner.CloneCell(source.Time),
+            By = OnlineRecordCloner.CloneCell(source.By)
+        };
+    }
+
+    public OnlineRecord ToOnlineRecord()
+    {
+        return new OnlineRecord
+        {
+            Rank = OnlineRecordCloner.CloneCell(Rank),
+            Time = OnlineRecordCloner.CloneCell(Time),
+            By = OnlineRecordCloner.CloneCell(By),
+            Mode = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() },
+            Server = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() }
+        };
+    }
 }
 
 public sealed class AppState
