@@ -7,8 +7,8 @@
         xmlns:local="clr-namespace:TmnfDedimaniaScraper"
         mc:Ignorable="d"
         Title="TMNF Dedimania Online Records Scraper"
-        Width="1450"
-        Height="960"
+        Width="1580"
+        Height="1060"
         WindowStartupLocation="CenterScreen"
         Background="#111827"
         Foreground="#E5E7EB">
@@ -33,6 +33,14 @@
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
             <Setter Property="CaretBrush" Value="White" />
             <Setter Property="SelectionBrush" Value="#2563EB" />
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource InputBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+            <Setter Property="Padding" Value="6,4"/>
         </Style>
 
         <Style TargetType="Button">
@@ -99,6 +107,8 @@
             <Setter Property="CanUserResizeRows" Value="False" />
             <Setter Property="RowHeaderWidth" Value="0" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
@@ -133,9 +143,9 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="200"/>
-            <RowDefinition Height="300"/>
+            <RowDefinition Height="2.2*"/>
+            <RowDefinition Height="1.05*"/>
+            <RowDefinition Height="1.35*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -204,40 +214,38 @@
                             Height="38"
                             Margin="0,0,8,0"
                             Click="LoadButton_Click"
-                            Content="Sayfayı Aç"/>
+                            Content="Siteyi Aç"/>
 
                     <Button Grid.Column="5"
                             x:Name="ScrapeButton"
-                            Width="110"
+                            Width="120"
                             Height="38"
                             Margin="0,0,8,0"
                             Click="ScrapeButton_Click"
                             Content="Veriyi Çek"/>
 
                     <Button Grid.Column="6"
-                            x:Name="ExportButton"
-                            Width="110"
-                            Height="38"
-                            Margin="0,0,8,0"
-                            Click="ExportButton_Click"
-                            Content="JSON Kaydet"/>
-
-                    <Button Grid.Column="7"
                             x:Name="AddBookmarkButton"
-                            Width="95"
+                            Width="90"
                             Height="38"
                             Margin="0,0,8,0"
                             Click="AddBookmarkButton_Click"
-                            ToolTip="Mevcut sayfayı yer imlerine ekle"
                             Content="☆ Kaydet"/>
 
-                    <Button Grid.Column="8"
+                    <Button Grid.Column="7"
                             x:Name="RemoveBookmarkButton"
-                            Width="80"
+                            Width="74"
                             Height="38"
+                            Margin="0,0,8,0"
                             Click="RemoveBookmarkButton_Click"
-                            ToolTip="Mevcut URL yer imiyse sil"
                             Content="✕ Sil"/>
+
+                    <Button Grid.Column="8"
+                            x:Name="ApplyRgbButton"
+                            Width="120"
+                            Height="38"
+                            Click="ApplyRgbButton_Click"
+                            Content="RGB Uygula"/>
                 </Grid>
 
                 <Border Grid.Row="1"
@@ -283,8 +291,8 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.2*"/>
-                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1.18*"/>
+                <ColumnDefinition Width="0.82*"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
@@ -297,7 +305,9 @@
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="1.2*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="1*"/>
                     </Grid.RowDefinitions>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -309,16 +319,67 @@
                               x:Name="RecordsGrid"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
-                              SelectionMode="Single"
                               SelectionChanged="RecordsGrid_SelectionChanged">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="70"/>
+                            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="68"/>
                             <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
-                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="70"/>
+                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="75"/>
                             <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
                             <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
+
+                    <TextBlock Grid.Row="2" Text="Yeni tablolar (Rank / Time / By)" FontSize="15" FontWeight="SemiBold" Margin="0,10,0,8"/>
+
+                    <Grid Grid.Row="3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Tablo 1" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="#93C5FD"/>
+                                <DataGrid Grid.Row="1"
+                                          x:Name="Table1Grid"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          SelectionChanged="Table1Grid_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="70"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
+                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Tablo 2" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="#93C5FD"/>
+                                <DataGrid Grid.Row="1"
+                                          x:Name="Table2Grid"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          SelectionChanged="Table2Grid_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="70"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
+                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>
@@ -335,7 +396,7 @@
                 <TextBlock Grid.Row="1"
                            Margin="0,4,0,10"
                            Foreground="{StaticResource SubtleForegroundBrush}"
-                           Text="Seçili satır, çekilen segment renkleriyle burada çizilir. Böylece stil bilgisinin gerçekten uygulanıp uygulanmadığını görebilirsin."/>
+                           Text="Seçili satır, düzenlenen segment renkleriyle burada tekrar çizilir. Böylece yeni tablolardaki ve çekilen kayıtlardaki değişiklikleri anında görebilirsin."/>
 
                 <Border Grid.Row="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="12">
                     <Grid>
@@ -392,8 +453,9 @@
 
         <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.15*"/>
-                <ColumnDefinition Width="0.85*"/>
+                <ColumnDefinition Width="1.25*"/>
+                <ColumnDefinition Width="0.72*"/>
+                <ColumnDefinition Width="0.9*"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
@@ -407,10 +469,11 @@
                     <DataGrid Grid.Row="1"
                               x:Name="SegmentsGrid"
                               AutoGenerateColumns="False"
-                              IsReadOnly="True">
+                              IsReadOnly="False"
+                              SelectionChanged="SegmentsGrid_SelectionChanged">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="80"/>
-                            <DataGridTemplateColumn Header="Renk" Width="70">
+                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="70" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="Renk" Width="62" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Border Width="28"
@@ -424,18 +487,132 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Color" Binding="{Binding Color}" Width="150"/>
-                            <DataGridTextColumn Header="Text" Binding="{Binding Text}" Width="*"/>
-                            <DataGridTextColumn Header="Weight" Binding="{Binding FontWeight}" Width="90"/>
-                            <DataGridTextColumn Header="Style" Binding="{Binding FontStyle}" Width="90"/>
-                            <DataGridTextColumn Header="Decoration" Binding="{Binding TextDecoration}" Width="120"/>
-                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName}" Width="160"/>
+                            <DataGridTextColumn Header="Color" Binding="{Binding Color, UpdateSourceTrigger=PropertyChanged}" Width="135"/>
+                            <DataGridTextColumn Header="BgColor" Binding="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" Width="135"/>
+                            <DataGridTextColumn Header="Text" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            <DataGridTextColumn Header="Weight" Binding="{Binding FontWeight, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
+                            <DataGridTemplateColumn Header="Style" Width="88">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding FontStyle}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <ComboBox SelectedValuePath="Content"
+                                                  SelectedValue="{Binding FontStyle, UpdateSourceTrigger=PropertyChanged}">
+                                            <ComboBoxItem Content="normal"/>
+                                            <ComboBoxItem Content="italic"/>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Decoration" Binding="{Binding TextDecoration, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="FontSize" Binding="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
+                            <DataGridTextColumn Header="FontFamily" Binding="{Binding FontFamily, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
+                            <DataGridTextColumn Header="Tag" Binding="{Binding Tag, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
+            <Border Grid.Column="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Seçili segment düzenleyici" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="SelectedSegmentInfoText"
+                               Grid.Row="1"
+                               Text="Bir segment seç"
+                               Foreground="{StaticResource SubtleForegroundBrush}"
+                               Margin="0,0,0,10"/>
+
+                    <Grid Grid.Row="2" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                            <TextBlock Text="Style" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="SegmentStyleComboBox"
+                                      SelectionChanged="SegmentStyleComboBox_SelectionChanged">
+                                <ComboBoxItem Content="normal"/>
+                                <ComboBoxItem Content="italic"/>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Renk önizleme" Margin="0,0,0,4"/>
+                            <Border x:Name="SelectedColorPreviewBorder"
+                                    Height="34"
+                                    CornerRadius="6"
+                                    BorderBrush="#475569"
+                                    BorderThickness="1"
+                                    Background="Transparent"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="3" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="RGB düzenleme" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD"/>
+                            <Grid Grid.Row="1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <TextBlock Text="R" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="RedTextBox"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                    <TextBlock Text="G" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="GreenTextBox"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="B" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="BlueTextBox"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="4" Text="Renk tablosu" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD" VerticalAlignment="Top"/>
+                    <DataGrid Grid.Row="4"
+                              x:Name="ColorPaletteGrid"
+                              Margin="0,28,0,0"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionChanged="ColorPaletteGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="40">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Width="20" Height="20" CornerRadius="4" BorderBrush="#475569" BorderThickness="1"
+                                                Background="{Binding CssColor, Converter={StaticResource CssColorToBrushConverter}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Ad" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="RGB" Binding="{Binding RgbText}" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

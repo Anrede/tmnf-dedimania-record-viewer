@@ -1,9 +1,10 @@
 using Microsoft.Web.WebView2.Core;
-using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -18,11 +19,22 @@ namespace TmnfDedimaniaScraper;
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<OnlineRecordRowView> _rows = new();
+    private readonly ObservableCollection<RankTimeByRowView> _table1Rows = new();
+    private readonly ObservableCollection<RankTimeByRowView> _table2Rows = new();
     private readonly ObservableCollection<SegmentRowView> _segments = new();
     private readonly ObservableCollection<BookmarkItem> _bookmarks = new();
+    private readonly ObservableCollection<ColorPaletteItem> _colorPalette = new();
+
     private ExtractionResult? _lastExtraction;
     private bool _pageReady;
+    private bool _isSynchronizingSelections;
+    private bool _suppressSegmentChangeHandling;
+    private bool _suppressStyleSelectionEvent;
+    private bool _suppressPaletteApply;
     private string _currentPageTitle = string.Empty;
+    private SelectionSource _currentSelectionSource = SelectionSource.None;
+    private OnlineRecord? _currentSelectedRecord;
+    private SegmentRowView? _currentSelectedSegment;
 
     private static readonly string AppDataDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -35,9 +47,13 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         RecordsGrid.ItemsSource = _rows;
+        Table1Grid.ItemsSource = _table1Rows;
+        Table2Grid.ItemsSource = _table2Rows;
         SegmentsGrid.ItemsSource = _segments;
         BookmarksItemsControl.ItemsSource = _bookmarks;
+        ColorPaletteGrid.ItemsSource = _colorPalette;
 
+        InitializeColorPalette();
         LoadBookmarks();
         Loaded += MainWindow_Loaded;
     }
@@ -46,6 +62,38 @@ public partial class MainWindow : Window
     {
         await InitializeBrowserAsync();
         await NavigateAsync(UrlTextBox.Text);
+    }
+
+    private void InitializeColorPalette()
+    {
+        _colorPalette.Clear();
+
+        AddPalette("White", 255, 255, 255);
+        AddPalette("Gold", 255, 215, 0);
+        AddPalette("Orange", 255, 165, 0);
+        AddPalette("Tomato", 255, 99, 71);
+        AddPalette("Crimson", 220, 20, 60);
+        AddPalette("Hot Pink", 255, 105, 180);
+        AddPalette("Purple", 147, 51, 234);
+        AddPalette("Dodger Blue", 30, 144, 255);
+        AddPalette("Deep Sky", 0, 191, 255);
+        AddPalette("Cyan", 0, 255, 255);
+        AddPalette("Lime", 50, 205, 50);
+        AddPalette("Chartreuse", 127, 255, 0);
+        AddPalette("Yellow", 255, 255, 0);
+        AddPalette("Silver", 192, 192, 192);
+    }
+
+    private void AddPalette(string name, byte r, byte g, byte b)
+    {
+        _colorPalette.Add(new ColorPaletteItem
+        {
+            Name = name,
+            R = r,
+            G = g,
+            B = b,
+            CssColor = CssColorHelper.ToCssRgb(Color.FromRgb(r, g, b))
+        });
     }
 
     private async Task InitializeBrowserAsync()
@@ -164,16 +212,15 @@ public partial class MainWindow : Window
 
             var extraction = await TryExtractAsync(TimeSpan.FromSeconds(3));
             _lastExtraction = extraction;
-
-            JsonTextBox.Text = JsonSerializer.Serialize(extraction, JsonOptions);
+            RefreshJsonText();
 
             if (extraction.Success)
-                FillGrid(extraction);
+                FillGrids(extraction);
             else
                 ResetPreview();
 
             StatusText.Text = extraction.Success
-                ? $"{extraction.Records.Count} kayıt çekildi."
+                ? $"{extraction.Records.Count} kayıt çekildi. Yeni tablolar oluşturuldu."
                 : $"Sonuç yok: {extraction.Message}";
         }
         catch (Exception ex)
@@ -219,30 +266,46 @@ public partial class MainWindow : Window
 
     private void ClearCurrentResults()
     {
+        UnhookSegmentRows();
         _lastExtraction = null;
         _rows.Clear();
+        _table1Rows.Clear();
+        _table2Rows.Clear();
         _segments.Clear();
+        _currentSelectedRecord = null;
+        _currentSelectedSegment = null;
+        _currentSelectionSource = SelectionSource.None;
         JsonTextBox.Clear();
+
+        _isSynchronizingSelections = true;
         RecordsGrid.SelectedItem = null;
+        Table1Grid.SelectedItem = null;
+        Table2Grid.SelectedItem = null;
+        SegmentsGrid.SelectedItem = null;
+        ColorPaletteGrid.SelectedItem = null;
+        _isSynchronizingSelections = false;
+
         ResetPreview();
+        ResetSelectedSegmentEditor();
     }
 
-    private void FillGrid(ExtractionResult extraction)
+    private void FillGrids(ExtractionResult extraction)
     {
         _rows.Clear();
-        _segments.Clear();
+        _table1Rows.Clear();
+        _table2Rows.Clear();
 
         foreach (var record in extraction.Records)
         {
-            _rows.Add(new OnlineRecordRowView
-            {
-                Source = record,
-                Rank = record.Rank.Text,
-                Time = record.Time.Text,
-                Mode = record.Mode.Text,
-                By = record.By.Text,
-                Server = record.Server.Text
-            });
+            EnsureEditableSegments(record.Rank);
+            EnsureEditableSegments(record.Time);
+            EnsureEditableSegments(record.Mode);
+            EnsureEditableSegments(record.By);
+            EnsureEditableSegments(record.Server);
+
+            _rows.Add(new OnlineRecordRowView(record));
+            _table1Rows.Add(new RankTimeByRowView(record, "Tablo 1"));
+            _table2Rows.Add(new RankTimeByRowView(record, "Tablo 2"));
         }
 
         if (_rows.Count > 0)
@@ -251,48 +314,321 @@ public partial class MainWindow : Window
             ResetPreview();
     }
 
+    private static void EnsureEditableSegments(CellData cell)
+    {
+        if (cell.Segments.Count > 0)
+        {
+            cell.Text = CellDataUtilities.BuildCellText(cell);
+            return;
+        }
+
+        cell.Segments.Add(new TextSegment
+        {
+            Text = string.IsNullOrWhiteSpace(cell.Text) ? string.Empty : cell.Text,
+            Color = "rgb(255, 255, 255)",
+            BackgroundColor = "transparent",
+            FontWeight = "400",
+            FontStyle = "normal",
+            TextDecoration = "none",
+            FontFamily = "Segoe UI",
+            FontSize = "14px",
+            ClassName = string.Empty,
+            Tag = "span"
+        });
+
+        cell.Text = CellDataUtilities.BuildCellText(cell);
+    }
+
     private void RecordsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_isSynchronizingSelections)
+            return;
+
+        if (RecordsGrid.SelectedItem is OnlineRecordRowView row)
+        {
+            SynchronizeActiveGrid(RecordsGrid);
+            SelectRecord(row.Source, SelectionSource.FullRecord);
+        }
+    }
+
+    private void Table1Grid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingSelections)
+            return;
+
+        if (Table1Grid.SelectedItem is RankTimeByRowView row)
+        {
+            SynchronizeActiveGrid(Table1Grid);
+            SelectRecord(row.Source, SelectionSource.Table1);
+        }
+    }
+
+    private void Table2Grid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingSelections)
+            return;
+
+        if (Table2Grid.SelectedItem is RankTimeByRowView row)
+        {
+            SynchronizeActiveGrid(Table2Grid);
+            SelectRecord(row.Source, SelectionSource.Table2);
+        }
+    }
+
+    private void SynchronizeActiveGrid(DataGrid activeGrid)
+    {
+        _isSynchronizingSelections = true;
+        try
+        {
+            if (!ReferenceEquals(activeGrid, RecordsGrid)) RecordsGrid.SelectedItem = null;
+            if (!ReferenceEquals(activeGrid, Table1Grid)) Table1Grid.SelectedItem = null;
+            if (!ReferenceEquals(activeGrid, Table2Grid)) Table2Grid.SelectedItem = null;
+        }
+        finally
+        {
+            _isSynchronizingSelections = false;
+        }
+    }
+
+    private void SelectRecord(OnlineRecord? record, SelectionSource source)
+    {
+        _currentSelectedRecord = record;
+        _currentSelectionSource = source;
+
+        _suppressSegmentChangeHandling = true;
+        UnhookSegmentRows();
         _segments.Clear();
 
-        if (RecordsGrid.SelectedItem is not OnlineRecordRowView selected || selected.Source is null)
+        if (record is not null)
+        {
+            AddSegments("#", record.Rank);
+            AddSegments("Time", record.Time);
+
+            if (source == SelectionSource.FullRecord)
+                AddSegments("Mode", record.Mode);
+
+            AddSegments("By", record.By);
+
+            if (source == SelectionSource.FullRecord)
+                AddSegments("Server", record.Server);
+        }
+
+        _suppressSegmentChangeHandling = false;
+
+        RenderCurrentPreview();
+
+        if (_segments.Count > 0)
+            SegmentsGrid.SelectedIndex = 0;
+        else
+            ResetSelectedSegmentEditor();
+    }
+
+    private void AddSegments(string cellName, CellData cell)
+    {
+        EnsureEditableSegments(cell);
+
+        foreach (var segment in cell.Segments)
+        {
+            var row = new SegmentRowView(cellName, cell, segment);
+            row.PropertyChanged += SegmentRowView_PropertyChanged;
+            _segments.Add(row);
+        }
+    }
+
+
+    private void UnhookSegmentRows()
+    {
+        foreach (var segment in _segments)
+            segment.PropertyChanged -= SegmentRowView_PropertyChanged;
+    }
+
+    private void SegmentRowView_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_suppressSegmentChangeHandling || sender is not SegmentRowView row)
+            return;
+
+        row.ApplyToSource();
+        RefreshAllViewTexts();
+        RenderCurrentPreview();
+        RefreshJsonText();
+
+        if (ReferenceEquals(row, _currentSelectedSegment))
+            LoadSelectedSegmentEditor(row);
+    }
+
+    private void RefreshAllViewTexts()
+    {
+        foreach (var row in _rows)
+            row.RefreshFromSource();
+
+        foreach (var row in _table1Rows)
+            row.RefreshFromSource();
+
+        foreach (var row in _table2Rows)
+            row.RefreshFromSource();
+    }
+
+    private void SegmentsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SegmentsGrid.SelectedItem is SegmentRowView row)
+        {
+            _currentSelectedSegment = row;
+            LoadSelectedSegmentEditor(row);
+        }
+        else
+        {
+            _currentSelectedSegment = null;
+            ResetSelectedSegmentEditor();
+        }
+    }
+
+    private void LoadSelectedSegmentEditor(SegmentRowView row)
+    {
+        SelectedSegmentInfoText.Text = $"Alan: {row.CellName}  •  Tag: {Safe(row.Tag, "-")}  •  Class: {Safe(row.ClassName, "-")}";
+        SelectedColorPreviewBorder.Background = CssColorHelper.ToBrush(row.Color, Brushes.Transparent);
+
+        if (CssColorHelper.TryParse(row.Color, out var color))
+        {
+            RedTextBox.Text = color.R.ToString(CultureInfo.InvariantCulture);
+            GreenTextBox.Text = color.G.ToString(CultureInfo.InvariantCulture);
+            BlueTextBox.Text = color.B.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            RedTextBox.Text = string.Empty;
+            GreenTextBox.Text = string.Empty;
+            BlueTextBox.Text = string.Empty;
+        }
+
+        _suppressStyleSelectionEvent = true;
+        SegmentStyleComboBox.SelectedIndex = row.FontStyle.Contains("italic", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        _suppressStyleSelectionEvent = false;
+
+        _suppressPaletteApply = true;
+        ColorPaletteGrid.SelectedItem = FindMatchingPalette(row.Color);
+        _suppressPaletteApply = false;
+    }
+
+    private static string Safe(string? text, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(text) ? fallback : text;
+    }
+
+    private ColorPaletteItem? FindMatchingPalette(string? cssColor)
+    {
+        if (!CssColorHelper.TryParse(cssColor, out var selected))
+            return null;
+
+        return _colorPalette.FirstOrDefault(item => item.R == selected.R && item.G == selected.G && item.B == selected.B);
+    }
+
+    private void ResetSelectedSegmentEditor()
+    {
+        SelectedSegmentInfoText.Text = "Bir segment seç";
+        SelectedColorPreviewBorder.Background = Brushes.Transparent;
+        RedTextBox.Text = string.Empty;
+        GreenTextBox.Text = string.Empty;
+        BlueTextBox.Text = string.Empty;
+
+        _suppressStyleSelectionEvent = true;
+        SegmentStyleComboBox.SelectedIndex = -1;
+        _suppressStyleSelectionEvent = false;
+
+        _suppressPaletteApply = true;
+        ColorPaletteGrid.SelectedItem = null;
+        _suppressPaletteApply = false;
+    }
+
+    private void SegmentStyleComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressStyleSelectionEvent || _currentSelectedSegment is null)
+            return;
+
+        if (SegmentStyleComboBox.SelectedItem is ComboBoxItem comboItem)
+            _currentSelectedSegment.FontStyle = comboItem.Content?.ToString() ?? "normal";
+    }
+
+    private void ApplyRgbButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentSelectedSegment is null)
+        {
+            MessageBox.Show("Önce bir segment seç.");
+            return;
+        }
+
+        if (!TryReadRgb(out byte r, out byte g, out byte b))
+        {
+            MessageBox.Show("RGB alanlarına 0 ile 255 arasında sayılar gir.");
+            return;
+        }
+
+        _currentSelectedSegment.Color = CssColorHelper.ToCssRgb(Color.FromRgb(r, g, b));
+    }
+
+    private void ColorPaletteGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressPaletteApply || _currentSelectedSegment is null)
+            return;
+
+        if (ColorPaletteGrid.SelectedItem is ColorPaletteItem item)
+            _currentSelectedSegment.Color = item.CssColor;
+    }
+
+    private bool TryReadRgb(out byte r, out byte g, out byte b)
+    {
+        r = g = b = 0;
+
+        return byte.TryParse(RedTextBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out r)
+            && byte.TryParse(GreenTextBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out g)
+            && byte.TryParse(BlueTextBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out b);
+    }
+
+    private void RenderCurrentPreview()
+    {
+        if (_currentSelectedRecord is null)
         {
             ResetPreview();
             return;
         }
 
-        AddSegments("#", selected.Source.Rank);
-        AddSegments("Time", selected.Source.Time);
-        AddSegments("Mode", selected.Source.Mode);
-        AddSegments("By", selected.Source.By);
-        AddSegments("Server", selected.Source.Server);
+        RenderCellPreview(PreviewRankText, _currentSelectedRecord.Rank);
+        RenderCellPreview(PreviewTimeText, _currentSelectedRecord.Time);
+        RenderCellPreview(PreviewByText, _currentSelectedRecord.By);
 
-        RenderCellPreview(PreviewRankText, selected.Source.Rank);
-        RenderCellPreview(PreviewTimeText, selected.Source.Time);
-        RenderCellPreview(PreviewModeText, selected.Source.Mode);
-        RenderCellPreview(PreviewByText, selected.Source.By);
-        RenderCellPreview(PreviewServerText, selected.Source.Server);
+        if (_currentSelectionSource == SelectionSource.FullRecord)
+        {
+            RenderCellPreview(PreviewModeText, _currentSelectedRecord.Mode);
+            RenderCellPreview(PreviewServerText, _currentSelectedRecord.Server);
+        }
+        else
+        {
+            SetPlainPreviewText(PreviewModeText, "-");
+            SetPlainPreviewText(PreviewServerText, "-");
+        }
     }
 
     private void ResetPreview()
     {
-        PreviewRankText.Inlines.Clear();
-        PreviewTimeText.Inlines.Clear();
-        PreviewModeText.Inlines.Clear();
-        PreviewByText.Inlines.Clear();
-        PreviewServerText.Inlines.Clear();
+        SetPlainPreviewText(PreviewRankText, "-");
+        SetPlainPreviewText(PreviewTimeText, "-");
+        SetPlainPreviewText(PreviewModeText, "-");
+        SetPlainPreviewText(PreviewByText, "-");
+        SetPlainPreviewText(PreviewServerText, "-");
+    }
 
-        PreviewRankText.Text = "-";
-        PreviewTimeText.Text = "-";
-        PreviewModeText.Text = "-";
-        PreviewByText.Text = "-";
-        PreviewServerText.Text = "-";
+    private static void SetPlainPreviewText(TextBlock target, string text)
+    {
+        target.Inlines.Clear();
+        target.Foreground = Brushes.White;
+        target.Text = text;
     }
 
     private void RenderCellPreview(TextBlock target, CellData cell)
     {
         target.Text = string.Empty;
         target.Inlines.Clear();
+
+        EnsureEditableSegments(cell);
 
         if (cell.Segments.Count == 0)
         {
@@ -370,61 +706,23 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(cssValue))
             return null;
 
-        var match = Regex.Match(cssValue, @"[\d.]+");
-        if (!match.Success)
-            return null;
-
-        if (!double.TryParse(match.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var px))
-            return null;
-
-        return px;
+        cssValue = cssValue.Replace("px", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+        return double.TryParse(cssValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
+            ? size
+            : null;
     }
 
-    private void AddSegments(string cellName, CellData cell)
+    private void RefreshJsonText()
     {
-        foreach (var segment in cell.Segments)
-        {
-            _segments.Add(new SegmentRowView
-            {
-                CellName = cellName,
-                Text = segment.Text,
-                Color = segment.Color,
-                FontWeight = segment.FontWeight,
-                FontStyle = segment.FontStyle,
-                TextDecoration = segment.TextDecoration,
-                ClassName = segment.ClassName
-            });
-        }
+        JsonTextBox.Text = JsonSerializer.Serialize(_lastExtraction, JsonOptions);
     }
 
-    private void ExportButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_lastExtraction is null)
-        {
-            MessageBox.Show("Önce veri çekmelisin.");
-            return;
-        }
-
-        var dialog = new SaveFileDialog
-        {
-            Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-            FileName = "dedimania-online-records.json"
-        };
-
-        if (dialog.ShowDialog() != true)
-            return;
-
-        File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(_lastExtraction, JsonOptions));
-        StatusText.Text = $"JSON kaydedildi: {dialog.FileName}";
-    }
-
-    private async void BookmarkButton_Click(object sender, RoutedEventArgs e)
+    private void BookmarkButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.DataContext is not BookmarkItem bookmark)
             return;
 
-        await NavigateAsync(bookmark.Url);
-        StatusText.Text = $"Yer imi açıldı: {bookmark.Title}";
+        _ = NavigateAsync(bookmark.Url);
     }
 
     private void AddBookmarkButton_Click(object sender, RoutedEventArgs e)
@@ -481,9 +779,7 @@ public partial class MainWindow : Window
     private string BuildBookmarkTitle(string url)
     {
         if (!string.IsNullOrWhiteSpace(_currentPageTitle))
-        {
             return TrimForDisplay(_currentPageTitle, 42);
-        }
 
         try
         {
@@ -740,6 +1036,14 @@ public partial class MainWindow : Window
 """;
 }
 
+public enum SelectionSource
+{
+    None,
+    FullRecord,
+    Table1,
+    Table2
+}
+
 public sealed class ExtractionResult
 {
     public bool Success { get; set; }
@@ -778,31 +1082,180 @@ public sealed class TextSegment
     public string Tag { get; set; } = string.Empty;
 }
 
-public sealed class OnlineRecordRowView
+public static class CellDataUtilities
 {
-    public string Rank { get; set; } = string.Empty;
-    public string Time { get; set; } = string.Empty;
-    public string Mode { get; set; } = string.Empty;
-    public string By { get; set; } = string.Empty;
-    public string Server { get; set; } = string.Empty;
-    public OnlineRecord? Source { get; set; }
+    public static string BuildCellText(CellData? cell)
+    {
+        if (cell is null)
+            return string.Empty;
+
+        if (cell.Segments.Count == 0)
+            return cell.Text ?? string.Empty;
+
+        return string.Join(" ", cell.Segments.Select(s => s.Text).Where(t => !string.IsNullOrWhiteSpace(t))).Trim();
+    }
 }
 
-public sealed class SegmentRowView
+public abstract class ObservableObject : INotifyPropertyChanged
 {
-    public string CellName { get; set; } = string.Empty;
-    public string Text { get; set; } = string.Empty;
-    public string Color { get; set; } = string.Empty;
-    public string FontWeight { get; set; } = string.Empty;
-    public string FontStyle { get; set; } = string.Empty;
-    public string TextDecoration { get; set; } = string.Empty;
-    public string ClassName { get; set; } = string.Empty;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        return true;
+    }
+
+    protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+public sealed class OnlineRecordRowView : ObservableObject
+{
+    public OnlineRecordRowView(OnlineRecord source)
+    {
+        Source = source;
+        RefreshFromSource();
+    }
+
+    public OnlineRecord Source { get; }
+
+    private string _rank = string.Empty;
+    private string _time = string.Empty;
+    private string _mode = string.Empty;
+    private string _by = string.Empty;
+    private string _server = string.Empty;
+
+    public string Rank { get => _rank; private set => SetProperty(ref _rank, value); }
+    public string Time { get => _time; private set => SetProperty(ref _time, value); }
+    public string Mode { get => _mode; private set => SetProperty(ref _mode, value); }
+    public string By { get => _by; private set => SetProperty(ref _by, value); }
+    public string Server { get => _server; private set => SetProperty(ref _server, value); }
+
+    public void RefreshFromSource()
+    {
+        Rank = CellDataUtilities.BuildCellText(Source.Rank);
+        Time = CellDataUtilities.BuildCellText(Source.Time);
+        Mode = CellDataUtilities.BuildCellText(Source.Mode);
+        By = CellDataUtilities.BuildCellText(Source.By);
+        Server = CellDataUtilities.BuildCellText(Source.Server);
+    }
+}
+
+public sealed class RankTimeByRowView : ObservableObject
+{
+    public RankTimeByRowView(OnlineRecord source, string tableName)
+    {
+        Source = source;
+        TableName = tableName;
+        RefreshFromSource();
+    }
+
+    public OnlineRecord Source { get; }
+    public string TableName { get; }
+
+    private string _rank = string.Empty;
+    private string _time = string.Empty;
+    private string _by = string.Empty;
+
+    public string Rank { get => _rank; private set => SetProperty(ref _rank, value); }
+    public string Time { get => _time; private set => SetProperty(ref _time, value); }
+    public string By { get => _by; private set => SetProperty(ref _by, value); }
+
+    public void RefreshFromSource()
+    {
+        Rank = CellDataUtilities.BuildCellText(Source.Rank);
+        Time = CellDataUtilities.BuildCellText(Source.Time);
+        By = CellDataUtilities.BuildCellText(Source.By);
+    }
+}
+
+public sealed class SegmentRowView : ObservableObject
+{
+    public SegmentRowView(string cellName, CellData sourceCell, TextSegment sourceSegment)
+    {
+        CellName = cellName;
+        SourceCell = sourceCell;
+        SourceSegment = sourceSegment;
+        LoadFromSource();
+    }
+
+    public string CellName { get; }
+    public CellData SourceCell { get; }
+    public TextSegment SourceSegment { get; }
+
+    private string _text = string.Empty;
+    private string _color = string.Empty;
+    private string _backgroundColor = string.Empty;
+    private string _fontWeight = string.Empty;
+    private string _fontStyle = string.Empty;
+    private string _textDecoration = string.Empty;
+    private string _fontFamily = string.Empty;
+    private string _fontSize = string.Empty;
+    private string _className = string.Empty;
+    private string _tag = string.Empty;
+
+    public string Text { get => _text; set => SetProperty(ref _text, value); }
+    public string Color { get => _color; set => SetProperty(ref _color, value); }
+    public string BackgroundColor { get => _backgroundColor; set => SetProperty(ref _backgroundColor, value); }
+    public string FontWeight { get => _fontWeight; set => SetProperty(ref _fontWeight, value); }
+    public string FontStyle { get => _fontStyle; set => SetProperty(ref _fontStyle, value); }
+    public string TextDecoration { get => _textDecoration; set => SetProperty(ref _textDecoration, value); }
+    public string FontFamily { get => _fontFamily; set => SetProperty(ref _fontFamily, value); }
+    public string FontSize { get => _fontSize; set => SetProperty(ref _fontSize, value); }
+    public string ClassName { get => _className; set => SetProperty(ref _className, value); }
+    public string Tag { get => _tag; set => SetProperty(ref _tag, value); }
+
+    public void LoadFromSource()
+    {
+        Text = SourceSegment.Text;
+        Color = SourceSegment.Color;
+        BackgroundColor = SourceSegment.BackgroundColor;
+        FontWeight = SourceSegment.FontWeight;
+        FontStyle = SourceSegment.FontStyle;
+        TextDecoration = SourceSegment.TextDecoration;
+        FontFamily = SourceSegment.FontFamily;
+        FontSize = SourceSegment.FontSize;
+        ClassName = SourceSegment.ClassName;
+        Tag = SourceSegment.Tag;
+    }
+
+    public void ApplyToSource()
+    {
+        SourceSegment.Text = Text ?? string.Empty;
+        SourceSegment.Color = Color ?? string.Empty;
+        SourceSegment.BackgroundColor = BackgroundColor ?? string.Empty;
+        SourceSegment.FontWeight = FontWeight ?? string.Empty;
+        SourceSegment.FontStyle = FontStyle ?? string.Empty;
+        SourceSegment.TextDecoration = TextDecoration ?? string.Empty;
+        SourceSegment.FontFamily = FontFamily ?? string.Empty;
+        SourceSegment.FontSize = FontSize ?? string.Empty;
+        SourceSegment.ClassName = ClassName ?? string.Empty;
+        SourceSegment.Tag = Tag ?? string.Empty;
+        SourceCell.Text = CellDataUtilities.BuildCellText(SourceCell);
+    }
 }
 
 public sealed class BookmarkItem
 {
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
+}
+
+public sealed class ColorPaletteItem
+{
+    public string Name { get; set; } = string.Empty;
+    public byte R { get; set; }
+    public byte G { get; set; }
+    public byte B { get; set; }
+    public string CssColor { get; set; } = string.Empty;
+    public string RgbText => $"{R}, {G}, {B}";
 }
 
 public sealed class CssColorToBrushConverter : IValueConverter
@@ -830,6 +1283,11 @@ public static class CssColorHelper
         return fallback;
     }
 
+    public static string ToCssRgb(Color color)
+    {
+        return $"rgb({color.R}, {color.G}, {color.B})";
+    }
+
     public static bool TryParse(string? cssColor, out Color color)
     {
         color = Colors.Transparent;
@@ -838,6 +1296,12 @@ public static class CssColorHelper
             return false;
 
         cssColor = cssColor.Trim();
+
+        if (cssColor.Equals("transparent", StringComparison.OrdinalIgnoreCase))
+        {
+            color = Colors.Transparent;
+            return true;
+        }
 
         var rgbMatch = RgbRegex.Match(cssColor);
         if (rgbMatch.Success)

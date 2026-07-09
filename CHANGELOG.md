@@ -1,8 +1,8 @@
-## v03 - Browser Navigation and Bookmark Support
+## v04 - Editable Tables and Segment Styling Tools
 
-- Added back, forward, and refresh buttons for the embedded browser.
-- Added support for opening a page by pressing Enter in the address bar.
-- Added a Chrome-like bookmark bar.
-- Added a save bookmark button to store the current page as a bookmark.
-- Added a delete bookmark button to remove the bookmark for the current URL.
-- Stored bookmarks locally in `LocalApplicationData\TmnfDedimaniaScraper\bookmarks.json`.
+- Added two new generated tables based on the extracted records: `Rank / Time` and `By`.
+- Shared the same record references between the main table and the generated tables, allowing segment edits to remain visible across all selections.
+- Made the segment details section editable.
+- Added an RGB editor for the selected segment.
+- Added a color table for easier segment color selection.
+- Added style selection support for switching between italic and normal text styles.
