@@ -1,18 +1,23 @@
 using Microsoft.Web.WebView2.Core;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using WinForms = System.Windows.Forms;
 
 namespace TmnfDedimaniaScraper;
 
@@ -26,21 +31,21 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ColorPaletteItem> _colorPalette = new();
 
     private ExtractionResult? _lastExtraction;
+    private OnlineRecord? _currentSelectedRecord;
+    private SegmentRowView? _currentSelectedSegment;
+    private SelectionSource _currentSelectionSource = SelectionSource.None;
+
     private bool _pageReady;
+    private string _currentPageTitle = string.Empty;
     private bool _isSynchronizingSelections;
     private bool _suppressSegmentChangeHandling;
     private bool _suppressStyleSelectionEvent;
     private bool _suppressPaletteApply;
-    private string _currentPageTitle = string.Empty;
-    private SelectionSource _currentSelectionSource = SelectionSource.None;
-    private OnlineRecord? _currentSelectedRecord;
-    private SegmentRowView? _currentSelectedSegment;
+    private Color? _pendingEditorColor;
 
-    private static readonly string AppDataDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "TmnfDedimaniaScraper");
-
-    private static readonly string BookmarksFilePath = Path.Combine(AppDataDirectory, "bookmarks.json");
+    private const string AppFolderName = "TmnfDedimaniaScraper";
+    private static string AppDataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolderName);
+    private static string BookmarksFilePath => Path.Combine(AppDataDirectory, "bookmarks.json");
 
     public MainWindow()
     {
@@ -82,6 +87,7 @@ public partial class MainWindow : Window
         AddPalette("Chartreuse", 127, 255, 0);
         AddPalette("Yellow", 255, 255, 0);
         AddPalette("Silver", 192, 192, 192);
+        AddPalette("Gray", 128, 128, 128);
     }
 
     private void AddPalette(string name, byte r, byte g, byte b)
@@ -220,7 +226,7 @@ public partial class MainWindow : Window
                 ResetPreview();
 
             StatusText.Text = extraction.Success
-                ? $"{extraction.Records.Count} kayıt çekildi. Yeni tablolar oluşturuldu."
+                ? $"{extraction.Records.Count} kayıt çekildi. Özel listeler için rank girip ekleyebilirsin."
                 : $"Sonuç yok: {extraction.Message}";
         }
         catch (Exception ex)
@@ -275,7 +281,10 @@ public partial class MainWindow : Window
         _currentSelectedRecord = null;
         _currentSelectedSegment = null;
         _currentSelectionSource = SelectionSource.None;
+        _pendingEditorColor = null;
         JsonTextBox.Clear();
+        Table1RankInput.Clear();
+        Table2RankInput.Clear();
 
         _isSynchronizingSelections = true;
         RecordsGrid.SelectedItem = null;
@@ -292,8 +301,6 @@ public partial class MainWindow : Window
     private void FillGrids(ExtractionResult extraction)
     {
         _rows.Clear();
-        _table1Rows.Clear();
-        _table2Rows.Clear();
 
         foreach (var record in extraction.Records)
         {
@@ -304,8 +311,6 @@ public partial class MainWindow : Window
             EnsureEditableSegments(record.Server);
 
             _rows.Add(new OnlineRecordRowView(record));
-            _table1Rows.Add(new RankTimeByRowView(record, "Tablo 1"));
-            _table2Rows.Add(new RankTimeByRowView(record, "Tablo 2"));
         }
 
         if (_rows.Count > 0)
@@ -435,7 +440,6 @@ public partial class MainWindow : Window
         }
     }
 
-
     private void UnhookSegmentRows()
     {
         foreach (var segment in _segments)
@@ -485,28 +489,15 @@ public partial class MainWindow : Window
     private void LoadSelectedSegmentEditor(SegmentRowView row)
     {
         SelectedSegmentInfoText.Text = $"Alan: {row.CellName}  •  Tag: {Safe(row.Tag, "-")}  •  Class: {Safe(row.ClassName, "-")}";
-        SelectedColorPreviewBorder.Background = CssColorHelper.ToBrush(row.Color, Brushes.Transparent);
 
         if (CssColorHelper.TryParse(row.Color, out var color))
-        {
-            RedTextBox.Text = color.R.ToString(CultureInfo.InvariantCulture);
-            GreenTextBox.Text = color.G.ToString(CultureInfo.InvariantCulture);
-            BlueTextBox.Text = color.B.ToString(CultureInfo.InvariantCulture);
-        }
+            SetPendingEditorColor(color, true);
         else
-        {
-            RedTextBox.Text = string.Empty;
-            GreenTextBox.Text = string.Empty;
-            BlueTextBox.Text = string.Empty;
-        }
+            ResetEditorColorInputs();
 
         _suppressStyleSelectionEvent = true;
         SegmentStyleComboBox.SelectedIndex = row.FontStyle.Contains("italic", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         _suppressStyleSelectionEvent = false;
-
-        _suppressPaletteApply = true;
-        ColorPaletteGrid.SelectedItem = FindMatchingPalette(row.Color);
-        _suppressPaletteApply = false;
     }
 
     private static string Safe(string? text, string fallback)
@@ -525,17 +516,39 @@ public partial class MainWindow : Window
     private void ResetSelectedSegmentEditor()
     {
         SelectedSegmentInfoText.Text = "Bir segment seç";
+        ResetEditorColorInputs();
+
+        _suppressStyleSelectionEvent = true;
+        SegmentStyleComboBox.SelectedIndex = -1;
+        _suppressStyleSelectionEvent = false;
+    }
+
+    private void ResetEditorColorInputs()
+    {
+        _pendingEditorColor = null;
         SelectedColorPreviewBorder.Background = Brushes.Transparent;
         RedTextBox.Text = string.Empty;
         GreenTextBox.Text = string.Empty;
         BlueTextBox.Text = string.Empty;
 
-        _suppressStyleSelectionEvent = true;
-        SegmentStyleComboBox.SelectedIndex = -1;
-        _suppressStyleSelectionEvent = false;
-
         _suppressPaletteApply = true;
         ColorPaletteGrid.SelectedItem = null;
+        _suppressPaletteApply = false;
+    }
+
+    private void SetPendingEditorColor(Color color, bool syncPaletteSelection)
+    {
+        _pendingEditorColor = color;
+        SelectedColorPreviewBorder.Background = new SolidColorBrush(color);
+        RedTextBox.Text = color.R.ToString(CultureInfo.InvariantCulture);
+        GreenTextBox.Text = color.G.ToString(CultureInfo.InvariantCulture);
+        BlueTextBox.Text = color.B.ToString(CultureInfo.InvariantCulture);
+
+        if (!syncPaletteSelection)
+            return;
+
+        _suppressPaletteApply = true;
+        ColorPaletteGrid.SelectedItem = FindMatchingPalette(CssColorHelper.ToCssRgb(color));
         _suppressPaletteApply = false;
     }
 
@@ -546,6 +559,30 @@ public partial class MainWindow : Window
 
         if (SegmentStyleComboBox.SelectedItem is ComboBoxItem comboItem)
             _currentSelectedSegment.FontStyle = comboItem.Content?.ToString() ?? "normal";
+    }
+
+    private void SelectedColorPreviewBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        Color initialColor = _pendingEditorColor ?? Colors.White;
+
+        if (_currentSelectedSegment is not null && CssColorHelper.TryParse(_currentSelectedSegment.Color, out var currentColor))
+            initialColor = currentColor;
+
+        using var dialog = new WinForms.ColorDialog
+        {
+            AllowFullOpen = true,
+            FullOpen = true,
+            AnyColor = true,
+            SolidColorOnly = false,
+            Color = System.Drawing.Color.FromArgb(initialColor.R, initialColor.G, initialColor.B)
+        };
+
+        if (dialog.ShowDialog() == WinForms.DialogResult.OK)
+        {
+            var chosen = Color.FromRgb(dialog.Color.R, dialog.Color.G, dialog.Color.B);
+            SetPendingEditorColor(chosen, true);
+            StatusText.Text = "Renk seçildi. Uygulamak için RGB Uygula butonuna bas.";
+        }
     }
 
     private void ApplyRgbButton_Click(object sender, RoutedEventArgs e)
@@ -562,16 +599,22 @@ public partial class MainWindow : Window
             return;
         }
 
-        _currentSelectedSegment.Color = CssColorHelper.ToCssRgb(Color.FromRgb(r, g, b));
+        var selectedColor = Color.FromRgb(r, g, b);
+        SetPendingEditorColor(selectedColor, true);
+        _currentSelectedSegment.Color = CssColorHelper.ToCssRgb(selectedColor);
     }
 
     private void ColorPaletteGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppressPaletteApply || _currentSelectedSegment is null)
+        if (_suppressPaletteApply)
             return;
 
         if (ColorPaletteGrid.SelectedItem is ColorPaletteItem item)
-            _currentSelectedSegment.Color = item.CssColor;
+        {
+            var color = Color.FromRgb(item.R, item.G, item.B);
+            SetPendingEditorColor(color, false);
+            StatusText.Text = "Renk tablosundan seçim yapıldı. Uygulamak için RGB Uygula butonuna bas.";
+        }
     }
 
     private bool TryReadRgb(out byte r, out byte g, out byte b)
@@ -840,6 +883,110 @@ public partial class MainWindow : Window
         BookmarksItemsControl.ItemsSource = _bookmarks;
     }
 
+    private async void AddTable1ItemButton_Click(object sender, RoutedEventArgs e)
+    {
+        await AddRowToCustomTableAsync(Table1RankInput.Text, _table1Rows, Table1Grid, "Tablo 1");
+    }
+
+    private async void AddTable2ItemButton_Click(object sender, RoutedEventArgs e)
+    {
+        await AddRowToCustomTableAsync(Table2RankInput.Text, _table2Rows, Table2Grid, "Tablo 2");
+    }
+
+    private async Task AddRowToCustomTableAsync(string rankInput, ObservableCollection<RankTimeByRowView> target, DataGrid targetGrid, string tableName)
+    {
+        await Task.Yield();
+
+        if (_rows.Count == 0)
+        {
+            MessageBox.Show("Önce veriyi çekmelisin.");
+            return;
+        }
+
+        int? requestedRank = RankParsingHelper.ParseRankNumber(rankInput);
+        if (requestedRank is null)
+        {
+            MessageBox.Show("Kaynak rank için 1, 1st, 2nd gibi bir değer gir.");
+            return;
+        }
+
+        var source = _rows
+            .Select(r => r.Source)
+            .FirstOrDefault(r => RankParsingHelper.ParseRankNumber(CellDataUtilities.BuildCellText(r.Rank)) == requestedRank.Value);
+
+        if (source is null)
+        {
+            MessageBox.Show($"{requestedRank}. sıraya ait kayıt bulunamadı.");
+            return;
+        }
+
+        var clone = OnlineRecordCloner.CloneRankTimeByRecord(source);
+        target.Add(new RankTimeByRowView(clone, tableName));
+        RenumberCustomTable(target);
+
+        targetGrid.SelectedItem = target.LastOrDefault();
+        StatusText.Text = $"{tableName} listesine kaynak rank {requestedRank} eklendi.";
+    }
+
+    private void RemoveTable1ItemButton_Click(object sender, RoutedEventArgs e)
+    {
+        RemoveSelectedCustomRow(_table1Rows, Table1Grid, SelectionSource.Table1, "Tablo 1");
+    }
+
+    private void RemoveTable2ItemButton_Click(object sender, RoutedEventArgs e)
+    {
+        RemoveSelectedCustomRow(_table2Rows, Table2Grid, SelectionSource.Table2, "Tablo 2");
+    }
+
+    private void RemoveSelectedCustomRow(ObservableCollection<RankTimeByRowView> target, DataGrid grid, SelectionSource source, string tableName)
+    {
+        if (grid.SelectedItem is not RankTimeByRowView selected)
+        {
+            MessageBox.Show("Silmek için önce tablodan bir satır seç.");
+            return;
+        }
+
+        int selectedIndex = grid.SelectedIndex;
+        target.Remove(selected);
+        RenumberCustomTable(target);
+
+        if (_currentSelectionSource == source && ReferenceEquals(_currentSelectedRecord, selected.Source))
+        {
+            if (target.Count > 0)
+            {
+                int nextIndex = Math.Clamp(selectedIndex, 0, target.Count - 1);
+                grid.SelectedIndex = nextIndex;
+            }
+            else
+            {
+                _isSynchronizingSelections = true;
+                grid.SelectedItem = null;
+                _isSynchronizingSelections = false;
+                _currentSelectedRecord = null;
+                _currentSelectionSource = SelectionSource.None;
+                _segments.Clear();
+                ResetPreview();
+                ResetSelectedSegmentEditor();
+            }
+        }
+
+        StatusText.Text = $"{tableName} listesinden satır silindi.";
+    }
+
+    private void RenumberCustomTable(IEnumerable<RankTimeByRowView> rows)
+    {
+        int index = 1;
+        foreach (var row in rows)
+        {
+            RankFormattingHelper.ApplyOrdinalRank(row.Source.Rank, index);
+            row.RefreshFromSource();
+            index++;
+        }
+
+        RefreshJsonText();
+        RenderCurrentPreview();
+    }
+
     private static string NormalizeUrl(string? rawUrl)
     {
         string url = (rawUrl ?? string.Empty).Trim();
@@ -1080,6 +1227,118 @@ public sealed class TextSegment
     public string FontSize { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
     public string Tag { get; set; } = string.Empty;
+}
+
+public static class OnlineRecordCloner
+{
+    public static OnlineRecord CloneRankTimeByRecord(OnlineRecord source)
+    {
+        return new OnlineRecord
+        {
+            Rank = CloneCell(source.Rank),
+            Time = CloneCell(source.Time),
+            By = CloneCell(source.By),
+            Mode = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() },
+            Server = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() }
+        };
+    }
+
+    public static CellData CloneCell(CellData source)
+    {
+        return new CellData
+        {
+            Text = source.Text,
+            Html = source.Html,
+            Segments = source.Segments.Select(CloneSegment).ToList()
+        };
+    }
+
+    public static TextSegment CloneSegment(TextSegment source)
+    {
+        return new TextSegment
+        {
+            Text = source.Text,
+            Color = source.Color,
+            BackgroundColor = source.BackgroundColor,
+            FontWeight = source.FontWeight,
+            FontStyle = source.FontStyle,
+            TextDecoration = source.TextDecoration,
+            FontFamily = source.FontFamily,
+            FontSize = source.FontSize,
+            ClassName = source.ClassName,
+            Tag = source.Tag
+        };
+    }
+}
+
+public static class RankFormattingHelper
+{
+    public static void ApplyOrdinalRank(CellData cell, int index)
+    {
+        string text = Ordinal(index);
+
+        if (cell.Segments.Count == 0)
+        {
+            cell.Segments.Add(new TextSegment
+            {
+                Text = text,
+                Color = "rgb(255, 255, 255)",
+                BackgroundColor = "transparent",
+                FontWeight = "400",
+                FontStyle = "normal",
+                TextDecoration = "none",
+                FontFamily = "Segoe UI",
+                FontSize = "14px",
+                ClassName = string.Empty,
+                Tag = "span"
+            });
+        }
+        else
+        {
+            TextSegment template = OnlineRecordCloner.CloneSegment(cell.Segments[0]);
+            template.Text = text;
+            cell.Segments.Clear();
+            cell.Segments.Add(template);
+        }
+
+        cell.Text = text;
+    }
+
+    public static string Ordinal(int number)
+    {
+        int abs = Math.Abs(number);
+        int lastTwo = abs % 100;
+        string suffix = lastTwo is >= 11 and <= 13
+            ? "th"
+            : (abs % 10) switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
+
+        return $"{number}{suffix}";
+    }
+}
+
+public static class RankParsingHelper
+{
+    private static readonly Regex RankRegex = new(@"^(\d+)", RegexOptions.Compiled);
+
+    public static int? ParseRankNumber(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var match = RankRegex.Match(text.Trim());
+        if (!match.Success)
+            return null;
+
+        return int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value)
+            ? value
+            : null;
+    }
 }
 
 public static class CellDataUtilities

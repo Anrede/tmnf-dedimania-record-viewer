@@ -7,8 +7,8 @@
         xmlns:local="clr-namespace:TmnfDedimaniaScraper"
         mc:Ignorable="d"
         Title="TMNF Dedimania Online Records Scraper"
-        Width="1580"
-        Height="1060"
+        Width="1680"
+        Height="1080"
         WindowStartupLocation="CenterScreen"
         Background="#111827"
         Foreground="#E5E7EB">
@@ -34,6 +34,7 @@
             <Setter Property="CaretBrush" Value="White" />
             <Setter Property="SelectionBrush" Value="#2563EB" />
             <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
         <Style TargetType="ComboBox">
@@ -41,6 +42,11 @@
             <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
             <Setter Property="Padding" Value="6,4"/>
+        </Style>
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="Background" Value="White"/>
         </Style>
 
         <Style TargetType="Button">
@@ -73,19 +79,25 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="ChromeNavButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Width" Value="40"/>
-            <Setter Property="Height" Value="38"/>
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="#0B1220"/>
             <Setter Property="BorderBrush" Value="#334155"/>
+            <Setter Property="Foreground" Value="#E5E7EB"/>
+        </Style>
+
+        <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#7F1D1D"/>
+            <Setter Property="BorderBrush" Value="#991B1B"/>
+        </Style>
+
+        <Style x:Key="ChromeNavButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="38"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="Bold"/>
         </Style>
 
-        <Style x:Key="BookmarkChipStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#0B1220"/>
-            <Setter Property="BorderBrush" Value="#334155"/>
-            <Setter Property="Foreground" Value="#E5E7EB"/>
+        <Style x:Key="BookmarkChipStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
             <Setter Property="Margin" Value="0,0,8,0"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="MaxWidth" Value="260"/>
@@ -109,6 +121,8 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="SelectionMode" Value="Single"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
@@ -143,9 +157,8 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="2.2*"/>
-            <RowDefinition Height="1.05*"/>
-            <RowDefinition Height="1.35*"/>
+            <RowDefinition Height="2.35*"/>
+            <RowDefinition Height="1.55*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -168,7 +181,6 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
@@ -204,7 +216,6 @@
                              Margin="0,0,10,0"
                              Padding="12,8"
                              FontSize="14"
-                             VerticalContentAlignment="Center"
                              KeyDown="UrlTextBox_KeyDown"
                              Text="https://tmnf.exchange/trackshow/9684537"/>
 
@@ -236,16 +247,8 @@
                             x:Name="RemoveBookmarkButton"
                             Width="74"
                             Height="38"
-                            Margin="0,0,8,0"
                             Click="RemoveBookmarkButton_Click"
                             Content="✕ Sil"/>
-
-                    <Button Grid.Column="8"
-                            x:Name="ApplyRgbButton"
-                            Width="120"
-                            Height="38"
-                            Click="ApplyRgbButton_Click"
-                            Content="RGB Uygula"/>
                 </Grid>
 
                 <Border Grid.Row="1"
@@ -291,41 +294,88 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.18*"/>
-                <ColumnDefinition Width="0.82*"/>
+                <ColumnDefinition Width="1.3*"/>
+                <ColumnDefinition Width="1*"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
-                <Grid>
-                    <wv2:WebView2 x:Name="Browser" Margin="1"/>
-                </Grid>
-            </Border>
+            <Grid Grid.Column="0" Margin="0,0,10,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="1.34*"/>
+                    <RowDefinition Height="0.82*"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,0,10">
+                    <Grid>
+                        <wv2:WebView2 x:Name="Browser" Margin="1"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
+                    <Grid Margin="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+
+                        <Border Grid.Row="1" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="#" Foreground="#93C5FD" Margin="0,0,10,8"/>
+                                <TextBlock Grid.Row="1" Text="Time" Foreground="#93C5FD" Margin="0,0,10,8"/>
+                                <TextBlock Grid.Row="2" Text="Mode" Foreground="#93C5FD" Margin="0,0,10,8"/>
+                                <TextBlock Grid.Row="3" Text="By" Foreground="#93C5FD" Margin="0,0,10,8"/>
+                                <TextBlock Grid.Row="4" Text="Server" Foreground="#93C5FD" Margin="0,0,10,0"/>
+
+                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="PreviewRankText" FontSize="16" FontWeight="Bold" Text="-" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewTimeText" FontSize="16" FontWeight="SemiBold" Text="-" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="PreviewModeText" FontSize="16" Text="-" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="PreviewByText" FontSize="16" Text="-" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="PreviewServerText" FontSize="16" Text="-" TextWrapping="Wrap"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
 
             <Border Grid.Column="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-                <Grid Margin="10">
+                <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="1.2*"/>
+                        <RowDefinition Height="1.1*"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="1*"/>
                     </Grid.RowDefinitions>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="Çekilen kayıtlar" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="  •  Eski sonuçlar arama başında temizlenir" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}"/>
+                        <TextBlock Text="  •  Veriyi çek dediğinde eski sonuçlar temizlenir" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}"/>
                     </StackPanel>
 
                     <DataGrid Grid.Row="1"
                               x:Name="RecordsGrid"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
-                              SelectionChanged="RecordsGrid_SelectionChanged">
+                              SelectionChanged="RecordsGrid_SelectionChanged"
+                              MinWidth="880">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="68"/>
-                            <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
-                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="75"/>
-                            <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
-                            <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*"/>
+                            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                            <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="90"/>
+                            <DataGridTextColumn Header="By" Binding="{Binding By}" Width="260"/>
+                            <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="260"/>
                         </DataGrid.Columns>
                     </DataGrid>
 
@@ -338,43 +388,73 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="8">
+                        <Border Grid.Column="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="Tablo 1" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="#93C5FD"/>
-                                <DataGrid Grid.Row="1"
+
+                                <TextBlock Text="Tablo 1" FontWeight="SemiBold" Foreground="#93C5FD" Margin="0,0,0,8"/>
+
+                                <Grid Grid.Row="1" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Kaynak rank gir: 1, 1st, 2nd..."/>
+                                    <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable1ItemButton_Click" Content="Ekle"/>
+                                    <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Seçileni Sil"/>
+                                </Grid>
+
+                                <DataGrid Grid.Row="2"
                                           x:Name="Table1Grid"
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
-                                          SelectionChanged="Table1Grid_SelectionChanged">
+                                          SelectionChanged="Table1Grid_SelectionChanged"
+                                          MinWidth="430">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="70"/>
-                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
-                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="220"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
                         </Border>
 
-                        <Border Grid.Column="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="8">
+                        <Border Grid.Column="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="Tablo 2" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="#93C5FD"/>
-                                <DataGrid Grid.Row="1"
+
+                                <TextBlock Text="Tablo 2" FontWeight="SemiBold" Foreground="#93C5FD" Margin="0,0,0,8"/>
+
+                                <Grid Grid.Row="1" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Kaynak rank gir: 1, 1st, 2nd..."/>
+                                    <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable2ItemButton_Click" Content="Ekle"/>
+                                    <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Seçileni Sil"/>
+                                </Grid>
+
+                                <DataGrid Grid.Row="2"
                                           x:Name="Table2Grid"
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
-                                          SelectionChanged="Table2Grid_SelectionChanged">
+                                          SelectionChanged="Table2Grid_SelectionChanged"
+                                          MinWidth="430">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="70"/>
-                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
-                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="220"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
@@ -384,78 +464,11 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Margin="0,12,0,12" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-            <Grid Margin="10">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" />
-                <TextBlock Grid.Row="1"
-                           Margin="0,4,0,10"
-                           Foreground="{StaticResource SubtleForegroundBrush}"
-                           Text="Seçili satır, düzenlenen segment renkleriyle burada tekrar çizilir. Böylece yeni tablolardaki ve çekilen kayıtlardaki değişiklikleri anında görebilirsin."/>
-
-                <Border Grid.Row="2" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="12">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="140"/>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="2*"/>
-                                <ColumnDefinition Width="2*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0" Text="#" FontWeight="Bold" Foreground="#93C5FD"/>
-                            <TextBlock Grid.Column="1" Text="Time" FontWeight="Bold" Foreground="#93C5FD"/>
-                            <TextBlock Grid.Column="2" Text="Mode" FontWeight="Bold" Foreground="#93C5FD"/>
-                            <TextBlock Grid.Column="3" Text="By" FontWeight="Bold" Foreground="#93C5FD"/>
-                            <TextBlock Grid.Column="4" Text="Server" FontWeight="Bold" Foreground="#93C5FD"/>
-                        </Grid>
-
-                        <Grid Grid.Row="1">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="140"/>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="2*"/>
-                                <ColumnDefinition Width="2*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <Border Grid.Column="0" Background="#101A2A" CornerRadius="6" Padding="8" Margin="0,0,8,0">
-                                <TextBlock x:Name="PreviewRankText" Text="-" TextWrapping="Wrap"/>
-                            </Border>
-                            <Border Grid.Column="1" Background="#101A2A" CornerRadius="6" Padding="8" Margin="0,0,8,0">
-                                <TextBlock x:Name="PreviewTimeText" Text="-" TextWrapping="Wrap"/>
-                            </Border>
-                            <Border Grid.Column="2" Background="#101A2A" CornerRadius="6" Padding="8" Margin="0,0,8,0">
-                                <TextBlock x:Name="PreviewModeText" Text="-" TextWrapping="Wrap"/>
-                            </Border>
-                            <Border Grid.Column="3" Background="#101A2A" CornerRadius="6" Padding="8" Margin="0,0,8,0">
-                                <TextBlock x:Name="PreviewByText" Text="-" TextWrapping="Wrap"/>
-                            </Border>
-                            <Border Grid.Column="4" Background="#101A2A" CornerRadius="6" Padding="8">
-                                <TextBlock x:Name="PreviewServerText" Text="-" TextWrapping="Wrap"/>
-                            </Border>
-                        </Grid>
-                    </Grid>
-                </Border>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.25*"/>
-                <ColumnDefinition Width="0.72*"/>
+                <ColumnDefinition Width="1.45*"/>
                 <ColumnDefinition Width="0.9*"/>
+                <ColumnDefinition Width="0.8*"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
@@ -464,22 +477,20 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-
-                    <TextBlock Text="Seçili satırın segment detayları" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock Text="Segment detayları" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <DataGrid Grid.Row="1"
                               x:Name="SegmentsGrid"
                               AutoGenerateColumns="False"
-                              IsReadOnly="False"
-                              SelectionChanged="SegmentsGrid_SelectionChanged">
+                              SelectionChanged="SegmentsGrid_SelectionChanged"
+                              MinWidth="980">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="70" IsReadOnly="True"/>
-                            <DataGridTemplateColumn Header="Renk" Width="62" IsReadOnly="True">
+                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="85" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="Renk" Width="55">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Border Width="28"
-                                                Height="16"
-                                                CornerRadius="4"
-                                                BorderBrush="#475569"
+                                        <Border Width="22" Height="22"
+                                                CornerRadius="5"
+                                                BorderBrush="#64748B"
                                                 BorderThickness="1"
                                                 Background="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}"
                                                 HorizontalAlignment="Center"
@@ -487,11 +498,11 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Color" Binding="{Binding Color, UpdateSourceTrigger=PropertyChanged}" Width="135"/>
-                            <DataGridTextColumn Header="BgColor" Binding="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" Width="135"/>
-                            <DataGridTextColumn Header="Text" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            <DataGridTextColumn Header="Color" Binding="{Binding Color, UpdateSourceTrigger=PropertyChanged}" Width="145"/>
+                            <DataGridTextColumn Header="BgColor" Binding="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" Width="145"/>
+                            <DataGridTextColumn Header="Text" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="260"/>
                             <DataGridTextColumn Header="Weight" Binding="{Binding FontWeight, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
-                            <DataGridTemplateColumn Header="Style" Width="88">
+                            <DataGridTemplateColumn Header="Style" Width="100">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding FontStyle}"/>
@@ -508,10 +519,10 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Decoration" Binding="{Binding TextDecoration, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
-                            <DataGridTextColumn Header="FontSize" Binding="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
-                            <DataGridTextColumn Header="FontFamily" Binding="{Binding FontFamily, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
-                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
-                            <DataGridTextColumn Header="Tag" Binding="{Binding Tag, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+                            <DataGridTextColumn Header="FontSize" Binding="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                            <DataGridTextColumn Header="FontFamily" Binding="{Binding FontFamily, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+                            <DataGridTextColumn Header="Tag" Binding="{Binding Tag, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -552,11 +563,14 @@
                         <StackPanel Grid.Column="1">
                             <TextBlock Text="Renk önizleme" Margin="0,0,0,4"/>
                             <Border x:Name="SelectedColorPreviewBorder"
-                                    Height="34"
+                                    Height="36"
+                                    Cursor="Hand"
                                     CornerRadius="6"
                                     BorderBrush="#475569"
                                     BorderThickness="1"
-                                    Background="Transparent"/>
+                                    Background="Transparent"
+                                    ToolTip="Tıkla, renk skalası açılsın"
+                                    MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
                         </StackPanel>
                     </Grid>
 
@@ -572,6 +586,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock Text="R" Margin="0,0,0,4"/>
@@ -581,9 +596,16 @@
                                     <TextBlock Text="G" Margin="0,0,0,4"/>
                                     <TextBox x:Name="GreenTextBox"/>
                                 </StackPanel>
-                                <StackPanel Grid.Column="2">
+                                <StackPanel Grid.Column="2" Margin="0,0,8,0">
                                     <TextBlock Text="B" Margin="0,0,0,4"/>
                                     <TextBox x:Name="BlueTextBox"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
+                                    <Button x:Name="ApplyRgbButton"
+                                            Width="100"
+                                            Height="34"
+                                            Click="ApplyRgbButton_Click"
+                                            Content="RGB Uygula"/>
                                 </StackPanel>
                             </Grid>
                         </Grid>
@@ -633,7 +655,7 @@
             </Border>
         </Grid>
 
-        <StatusBar Grid.Row="4" Background="#0B1220" Foreground="{StaticResource ForegroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" Margin="0,12,0,0">
+        <StatusBar Grid.Row="3" Background="#0B1220" Foreground="{StaticResource ForegroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" Margin="0,12,0,0">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Hazır"/>
             </StatusBarItem>
