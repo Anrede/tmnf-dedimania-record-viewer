@@ -121,6 +121,7 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="SelectionMode" Value="Single"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="CanUserSortColumns" Value="False"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
         </Style>
@@ -300,8 +301,8 @@
 
             <Grid Grid.Column="0" Margin="0,0,10,0">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="1.34*"/>
-                    <RowDefinition Height="0.82*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="132"/>
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,0,10">
@@ -317,9 +318,9 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
-                        <Border Grid.Row="1" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="14">
+                        <Border Grid.Row="1" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="12,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="100"/>
@@ -339,11 +340,11 @@
                                 <TextBlock Grid.Row="0" Grid.Column="3" Text="By" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
                                 <TextBlock Grid.Row="0" Grid.Column="4" Text="Server" Foreground="#93C5FD" Margin="0,0,0,8" FontWeight="SemiBold"/>
 
-                                <TextBlock Grid.Row="1" Grid.Column="0" x:Name="PreviewRankText" FontSize="16" FontWeight="Bold" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewTimeText" FontSize="16" FontWeight="SemiBold" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="2" x:Name="PreviewModeText" FontSize="16" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="3" x:Name="PreviewByText" FontSize="16" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Row="1" Grid.Column="4" x:Name="PreviewServerText" FontSize="16" Text="-" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" x:Name="PreviewRankText" FontSize="15" FontWeight="Bold" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewTimeText" FontSize="15" FontWeight="SemiBold" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" x:Name="PreviewModeText" FontSize="15" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="3" x:Name="PreviewByText" FontSize="15" Text="-" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="4" x:Name="PreviewServerText" FontSize="15" Text="-" TextWrapping="Wrap" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
                     </Grid>
@@ -369,7 +370,7 @@
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
                               SelectionChanged="RecordsGrid_SelectionChanged"
-                              MinWidth="880">
+                             >
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                             <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -414,7 +415,7 @@
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
                                           SelectionChanged="Table1Grid_SelectionChanged"
-                                          MinWidth="430">
+                                         >
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                                         <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -450,7 +451,7 @@
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
                                           SelectionChanged="Table2Grid_SelectionChanged"
-                                          MinWidth="430">
+                                         >
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
                                         <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
@@ -466,9 +467,8 @@
 
         <Grid Grid.Row="2" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.45*"/>
-                <ColumnDefinition Width="0.9*"/>
-                <ColumnDefinition Width="0.8*"/>
+                <ColumnDefinition Width="1.3*"/>
+                <ColumnDefinition Width="1*"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
@@ -483,7 +483,7 @@
                               AutoGenerateColumns="False"
                               CanUserSortColumns="False"
                               SelectionChanged="SegmentsGrid_SelectionChanged"
-                              MinWidth="980">
+                             >
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="85" IsReadOnly="True"/>
                             <DataGridTemplateColumn Header="Renk" Width="55">
@@ -529,131 +529,151 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
-                <Grid Margin="10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+            <Grid Grid.Column="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.35*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="0.65*"/>
+                </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Seçili segment düzenleyici" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="SelectedSegmentInfoText"
-                               Grid.Row="1"
-                               Text="Bir segment seç"
-                               Foreground="{StaticResource SubtleForegroundBrush}"
-                               Margin="0,0,0,10"/>
+                <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="2" Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Seçili segment düzenleyici" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <TextBlock x:Name="SelectedSegmentInfoText"
+                                   Grid.Row="0"
+                                   Text="Bir segment seç"
+                                   Visibility="Collapsed"
+                                   Height="0"
+                                   Margin="0"/>
 
-                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                            <TextBlock Text="Style" Margin="0,0,0,4"/>
-                            <ComboBox x:Name="SegmentStyleComboBox"
-                                      SelectionChanged="SegmentStyleComboBox_SelectionChanged">
-                                <ComboBoxItem Content="normal"/>
-                                <ComboBoxItem Content="italic"/>
-                            </ComboBox>
-                        </StackPanel>
+                        <Grid Grid.Row="1" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Renk önizleme" Margin="0,0,0,4"/>
-                            <Border x:Name="SelectedColorPreviewBorder"
-                                    Height="36"
-                                    Cursor="Hand"
-                                    CornerRadius="6"
-                                    BorderBrush="#475569"
-                                    BorderThickness="1"
-                                    Background="Transparent"
-                                    ToolTip="Tıkla, renk skalası açılsın"
-                                    MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
-                        </StackPanel>
-                    </Grid>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <TextBlock Text="Style" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="SegmentStyleComboBox"
+                                          Height="30"
+                                          SelectionChanged="SegmentStyleComboBox_SelectionChanged">
+                                    <ComboBoxItem Content="normal"/>
+                                    <ComboBoxItem Content="italic"/>
+                                </ComboBox>
+                            </StackPanel>
 
-                    <Border Grid.Row="3" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
-                        <Grid>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Renk önizleme" Margin="0,0,0,4"/>
+                                <Border x:Name="SelectedColorPreviewBorder"
+                                        Height="30"
+                                        Cursor="Hand"
+                                        CornerRadius="6"
+                                        BorderBrush="#475569"
+                                        BorderThickness="1"
+                                        Background="Transparent"
+                                        ToolTip="Tıkla, renk skalası açılsın"
+                                        MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Grid.Row="2">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Text="RGB düzenleme" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD"/>
+
+                            <Border Grid.Row="0" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="RGB düzenleme" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD"/>
+                                    <Grid Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                            <TextBlock Text="R" Margin="0,0,0,4"/>
+                                            <TextBox x:Name="RedTextBox"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                            <TextBlock Text="G" Margin="0,0,0,4"/>
+                                            <TextBox x:Name="GreenTextBox"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                            <TextBlock Text="B" Margin="0,0,0,4"/>
+                                            <TextBox x:Name="BlueTextBox"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
+                                            <Button x:Name="ApplyRgbButton"
+                                                    Width="100"
+                                                    Height="34"
+                                                    Click="ApplyRgbButton_Click"
+                                                    Content="RGB Uygula"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
                             <Grid Grid.Row="1">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                    <TextBlock Text="R" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="RedTextBox"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                    <TextBlock Text="G" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="GreenTextBox"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2" Margin="0,0,8,0">
-                                    <TextBlock Text="B" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="BlueTextBox"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
-                                    <Button x:Name="ApplyRgbButton"
-                                            Width="100"
-                                            Height="34"
-                                            Click="ApplyRgbButton_Click"
-                                            Content="RGB Uygula"/>
-                                </StackPanel>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Renk tablosu" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD"/>
+                                <DataGrid Grid.Row="1"
+                                          x:Name="ColorPaletteGrid"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          SelectionChanged="ColorPaletteGrid_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="" Width="40">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border Width="20" Height="20" CornerRadius="4" BorderBrush="#475569" BorderThickness="1"
+                                                            Background="{Binding CssColor, Converter={StaticResource CssColorToBrushConverter}}"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Ad" Binding="{Binding Name}" Width="*"/>
+                                        <DataGridTextColumn Header="RGB" Binding="{Binding RgbText}" Width="100"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
                             </Grid>
                         </Grid>
-                    </Border>
+                    </Grid>
+                </Border>
 
-                    <TextBlock Grid.Row="4" Text="Renk tablosu" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#93C5FD" VerticalAlignment="Top"/>
-                    <DataGrid Grid.Row="4"
-                              x:Name="ColorPaletteGrid"
-                              Margin="0,28,0,0"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              SelectionChanged="ColorPaletteGrid_SelectionChanged">
-                        <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="" Width="40">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Border Width="20" Height="20" CornerRadius="4" BorderBrush="#475569" BorderThickness="1"
-                                                Background="{Binding CssColor, Converter={StaticResource CssColorToBrushConverter}}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Ad" Binding="{Binding Name}" Width="*"/>
-                            <DataGridTextColumn Header="RGB" Binding="{Binding RgbText}" Width="100"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-            </Border>
+                <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-            <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10">
-                <Grid Margin="10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Text="Ham JSON" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <TextBox Grid.Row="1"
-                             x:Name="JsonTextBox"
-                             FontFamily="Consolas"
-                             FontSize="13"
-                             TextWrapping="NoWrap"
-                             AcceptsReturn="True"
-                             AcceptsTab="True"
-                             VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto"/>
-                </Grid>
-            </Border>
+                        <TextBlock Text="Ham JSON" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <TextBox Grid.Row="1"
+                                 x:Name="JsonTextBox"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 TextWrapping="NoWrap"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"/>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
 
         <StatusBar Grid.Row="3" Background="#0B1220" Foreground="{StaticResource ForegroundBrush}" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" Margin="0,12,0,0">
