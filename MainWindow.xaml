@@ -322,28 +322,28 @@
                         <Border Grid.Row="1" Background="#0B1220" BorderBrush="#243244" BorderThickness="1" CornerRadius="8" Padding="14">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90"/>
-                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="2*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Row="0" Text="#" Foreground="#93C5FD" Margin="0,0,10,8"/>
-                                <TextBlock Grid.Row="1" Text="Time" Foreground="#93C5FD" Margin="0,0,10,8"/>
-                                <TextBlock Grid.Row="2" Text="Mode" Foreground="#93C5FD" Margin="0,0,10,8"/>
-                                <TextBlock Grid.Row="3" Text="By" Foreground="#93C5FD" Margin="0,0,10,8"/>
-                                <TextBlock Grid.Row="4" Text="Server" Foreground="#93C5FD" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="#" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Time" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Mode" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Row="0" Grid.Column="3" Text="By" Foreground="#93C5FD" Margin="0,0,10,8" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Row="0" Grid.Column="4" Text="Server" Foreground="#93C5FD" Margin="0,0,0,8" FontWeight="SemiBold"/>
 
-                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="PreviewRankText" FontSize="16" FontWeight="Bold" Text="-" TextWrapping="Wrap"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewTimeText" FontSize="16" FontWeight="SemiBold" Text="-" TextWrapping="Wrap"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="PreviewModeText" FontSize="16" Text="-" TextWrapping="Wrap"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="PreviewByText" FontSize="16" Text="-" TextWrapping="Wrap"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="PreviewServerText" FontSize="16" Text="-" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" x:Name="PreviewRankText" FontSize="16" FontWeight="Bold" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewTimeText" FontSize="16" FontWeight="SemiBold" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" x:Name="PreviewModeText" FontSize="16" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="3" x:Name="PreviewByText" FontSize="16" Text="-" TextWrapping="Wrap" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="4" x:Name="PreviewServerText" FontSize="16" Text="-" TextWrapping="Wrap"/>
                             </Grid>
                         </Border>
                     </Grid>
@@ -404,7 +404,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Kaynak rank gir: 1, 1st, 2nd..."/>
+                                    <TextBox x:Name="Table1RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
                                     <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable1ItemButton_Click" Content="Ekle"/>
                                     <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable1ItemButton_Click" Content="Seçileni Sil"/>
                                 </Grid>
@@ -440,7 +440,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Kaynak rank gir: 1, 1st, 2nd..."/>
+                                    <TextBox x:Name="Table2RankInput" Margin="0,0,8,0" ToolTip="Eklenecek konumu gir: 1, 2, 3..."/>
                                     <Button Grid.Column="1" Width="72" Margin="0,0,8,0" Click="AddTable2ItemButton_Click" Content="Ekle"/>
                                     <Button Grid.Column="2" Width="100" Style="{StaticResource DangerButtonStyle}" Click="RemoveTable2ItemButton_Click" Content="Seçileni Sil"/>
                                 </Grid>
@@ -464,7 +464,7 @@
             </Border>
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1.45*"/>
                 <ColumnDefinition Width="0.9*"/>
@@ -481,6 +481,7 @@
                     <DataGrid Grid.Row="1"
                               x:Name="SegmentsGrid"
                               AutoGenerateColumns="False"
+                              CanUserSortColumns="False"
                               SelectionChanged="SegmentsGrid_SelectionChanged"
                               MinWidth="980">
                         <DataGrid.Columns>

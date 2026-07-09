@@ -226,7 +226,7 @@ public partial class MainWindow : Window
                 ResetPreview();
 
             StatusText.Text = extraction.Success
-                ? $"{extraction.Records.Count} kayıt çekildi. Özel listeler için rank girip ekleyebilirsin."
+                ? $"{extraction.Records.Count} kayıt çekildi. Tablo 1 ve Tablo 2 otomatik dolduruldu. İstersen konuma göre boş satır ekleyebilirsin."
                 : $"Sonuç yok: {extraction.Message}";
         }
         catch (Exception ex)
@@ -301,6 +301,8 @@ public partial class MainWindow : Window
     private void FillGrids(ExtractionResult extraction)
     {
         _rows.Clear();
+        _table1Rows.Clear();
+        _table2Rows.Clear();
 
         foreach (var record in extraction.Records)
         {
@@ -311,7 +313,12 @@ public partial class MainWindow : Window
             EnsureEditableSegments(record.Server);
 
             _rows.Add(new OnlineRecordRowView(record));
+            _table1Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Tablo 1"));
+            _table2Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Tablo 2"));
         }
+
+        RenumberCustomTable(_table1Rows);
+        RenumberCustomTable(_table2Rows);
 
         if (_rows.Count > 0)
             RecordsGrid.SelectedIndex = 0;
@@ -883,49 +890,33 @@ public partial class MainWindow : Window
         BookmarksItemsControl.ItemsSource = _bookmarks;
     }
 
-    private async void AddTable1ItemButton_Click(object sender, RoutedEventArgs e)
+    private void AddTable1ItemButton_Click(object sender, RoutedEventArgs e)
     {
-        await AddRowToCustomTableAsync(Table1RankInput.Text, _table1Rows, Table1Grid, "Tablo 1");
+        InsertBlankRowIntoCustomTable(Table1RankInput.Text, _table1Rows, Table1Grid, "Tablo 1");
     }
 
-    private async void AddTable2ItemButton_Click(object sender, RoutedEventArgs e)
+    private void AddTable2ItemButton_Click(object sender, RoutedEventArgs e)
     {
-        await AddRowToCustomTableAsync(Table2RankInput.Text, _table2Rows, Table2Grid, "Tablo 2");
+        InsertBlankRowIntoCustomTable(Table2RankInput.Text, _table2Rows, Table2Grid, "Tablo 2");
     }
 
-    private async Task AddRowToCustomTableAsync(string rankInput, ObservableCollection<RankTimeByRowView> target, DataGrid targetGrid, string tableName)
+    private void InsertBlankRowIntoCustomTable(string rankInput, ObservableCollection<RankTimeByRowView> target, DataGrid targetGrid, string tableName)
     {
-        await Task.Yield();
-
-        if (_rows.Count == 0)
+        int? requestedPosition = RankParsingHelper.ParseRankNumber(rankInput);
+        if (requestedPosition is null)
         {
-            MessageBox.Show("Önce veriyi çekmelisin.");
+            MessageBox.Show("Ekleme konumu için 1, 2, 3 gibi bir değer gir.");
             return;
         }
 
-        int? requestedRank = RankParsingHelper.ParseRankNumber(rankInput);
-        if (requestedRank is null)
-        {
-            MessageBox.Show("Kaynak rank için 1, 1st, 2nd gibi bir değer gir.");
-            return;
-        }
+        int insertIndex = Math.Clamp(requestedPosition.Value - 1, 0, target.Count);
+        OnlineRecord blankRecord = OnlineRecordFactory.CreateBlankRankTimeByRecord();
 
-        var source = _rows
-            .Select(r => r.Source)
-            .FirstOrDefault(r => RankParsingHelper.ParseRankNumber(CellDataUtilities.BuildCellText(r.Rank)) == requestedRank.Value);
-
-        if (source is null)
-        {
-            MessageBox.Show($"{requestedRank}. sıraya ait kayıt bulunamadı.");
-            return;
-        }
-
-        var clone = OnlineRecordCloner.CloneRankTimeByRecord(source);
-        target.Add(new RankTimeByRowView(clone, tableName));
+        target.Insert(insertIndex, new RankTimeByRowView(blankRecord, tableName));
         RenumberCustomTable(target);
 
-        targetGrid.SelectedItem = target.LastOrDefault();
-        StatusText.Text = $"{tableName} listesine kaynak rank {requestedRank} eklendi.";
+        targetGrid.SelectedIndex = insertIndex;
+        StatusText.Text = $"{tableName} listesine {insertIndex + 1}. sıraya boş kayıt eklendi.";
     }
 
     private void RemoveTable1ItemButton_Click(object sender, RoutedEventArgs e)
@@ -1227,6 +1218,46 @@ public sealed class TextSegment
     public string FontSize { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
     public string Tag { get; set; } = string.Empty;
+}
+
+public static class OnlineRecordFactory
+{
+    public static OnlineRecord CreateBlankRankTimeByRecord()
+    {
+        return new OnlineRecord
+        {
+            Rank = CreateStyledCell(string.Empty),
+            Time = CreateStyledCell(string.Empty),
+            By = CreateStyledCell(string.Empty),
+            Mode = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() },
+            Server = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() }
+        };
+    }
+
+    public static CellData CreateStyledCell(string text)
+    {
+        return new CellData
+        {
+            Text = text,
+            Html = string.Empty,
+            Segments = new List<TextSegment>
+            {
+                new TextSegment
+                {
+                    Text = text,
+                    Color = "rgb(255, 255, 255)",
+                    BackgroundColor = "transparent",
+                    FontWeight = "400",
+                    FontStyle = "normal",
+                    TextDecoration = "none",
+                    FontFamily = "Segoe UI",
+                    FontSize = "14px",
+                    ClassName = string.Empty,
+                    Tag = "span"
+                }
+            }
+        };
+    }
 }
 
 public static class OnlineRecordCloner
