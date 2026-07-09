@@ -319,10 +319,14 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0" Text="Style" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <ComboBox Grid.Column="1" x:Name="SegmentStyleComboBox" Height="28" SelectionChanged="SegmentStyleComboBox_SelectionChanged">
-                                <ComboBoxItem Content="normal"/>
-                                <ComboBoxItem Content="italic"/>
-                            </ComboBox>
+                            <Button Grid.Column="1" x:Name="SegmentStyleMenuButton" Height="28" Width="86" Padding="10,4" Click="SegmentStyleMenuButton_Click" Content="normal ▾">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="normal" Click="SegmentStyleMenuItem_Click"/>
+                                        <MenuItem Header="italic" Click="SegmentStyleMenuItem_Click"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
 
                             <TextBlock Grid.Column="3" Text="Renk" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <Border Grid.Column="4" x:Name="SelectedColorPreviewBorder" Height="28" Cursor="Hand" CornerRadius="6" BorderBrush="#475569" BorderThickness="1" Background="Transparent" ToolTip="Tıkla, renk skalası açılsın" MouseLeftButtonUp="SelectedColorPreviewBorder_MouseLeftButtonUp"/>
@@ -337,7 +341,7 @@
                         </Grid>
                     </Grid>
 
-                    <DataGrid Grid.Row="1" x:Name="SegmentsGrid" AutoGenerateColumns="False" CanUserSortColumns="False" SelectionChanged="SegmentsGrid_SelectionChanged">
+                    <DataGrid Grid.Row="1" x:Name="SegmentsGrid" AutoGenerateColumns="False" CanUserSortColumns="False" SelectionChanged="SegmentsGrid_SelectionChanged" BeginningEdit="SegmentsGrid_BeginningEdit">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="72" IsReadOnly="True"/>
                             <DataGridTemplateColumn Header="Renk" Width="50">
@@ -407,6 +411,11 @@
                             </Grid.RowDefinitions>
 
                             <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button x:Name="OnlineTabButton" Style="{StaticResource SecondaryButtonStyle}" Width="76" Height="28" Padding="0" Margin="0,0,6,0" Click="OnlineTabButton_Click" Content="Online"/>
+                                    <Button x:Name="OfflineTabButton" Style="{StaticResource SecondaryButtonStyle}" Width="76" Height="28" Padding="0" Margin="0,0,6,0" Click="OfflineTabButton_Click" Content="Offline"/>
+                                    <Button x:Name="MergeOfflineButton" Style="{StaticResource SecondaryButtonStyle}" Width="88" Height="28" Padding="0" Click="MergeOfflineButton_Click" Content="Birleştir" IsEnabled="False"/>
+                                </StackPanel>
                                 <Button x:Name="RecordsMenuButton" DockPanel.Dock="Left" Style="{StaticResource SecondaryButtonStyle}" Width="30" Height="26" Padding="0" Margin="0,0,8,0" Click="RecordsMenuButton_Click" Content="▾">
                                     <Button.ContextMenu>
                                         <ContextMenu>
@@ -419,15 +428,27 @@
                                 <TextBlock x:Name="TrackNameHeaderText" DockPanel.Dock="Left" Text="  •  -" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}" VerticalAlignment="Center"/>
                             </DockPanel>
 
-                            <DataGrid Grid.Row="1" x:Name="RecordsGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="RecordsGrid_SelectionChanged">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
-                                    <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
-                                    <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="90"/>
-                                    <DataGridTextColumn Header="By" Binding="{Binding By}" Width="260"/>
-                                    <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="260"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
+                            <Grid Grid.Row="1">
+                                <DataGrid x:Name="RecordsGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="RecordsGrid_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                        <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="90"/>
+                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="260"/>
+                                        <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="260"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <DataGrid x:Name="OfflineRecordsGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed" SelectionChanged="OfflineRecordsGrid_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="90"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="130"/>
+                                        <DataGridTextColumn Header="By" Binding="{Binding By}" Width="260"/>
+                                        <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="140"/>
+                                        <DataGridTextColumn Header="LB" Binding="{Binding LB}" Width="90"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
                         </Grid>
                     </Border>
 
@@ -557,10 +578,10 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Text="Dedimania görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Text="Görünüm önizleme" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
                             <DataGrid Grid.Row="1" x:Name="PreviewGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" SelectionMode="Single" SelectionUnit="FullRow">
                                 <DataGrid.Columns>
-                                    <DataGridTemplateColumn Header="#" Width="90">
+                                    <DataGridTemplateColumn x:Name="PreviewRankColumn" Header="#" Width="90">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <ItemsControl ItemsSource="{Binding RankSegments}">
@@ -582,7 +603,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Time" Width="120">
+                                    <DataGridTemplateColumn x:Name="PreviewTimeColumn" Header="Time" Width="120">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <ItemsControl ItemsSource="{Binding TimeSegments}">
@@ -596,7 +617,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Mode" Width="90">
+                                    <DataGridTemplateColumn x:Name="PreviewModeColumn" Header="Mode" Width="90">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <ItemsControl ItemsSource="{Binding ModeSegments}">
@@ -610,7 +631,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="By" Width="220">
+                                    <DataGridTemplateColumn x:Name="PreviewByColumn" Header="By" Width="220">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <ItemsControl ItemsSource="{Binding BySegments}">
@@ -624,10 +645,38 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Server" Width="240">
+                                    <DataGridTemplateColumn x:Name="PreviewServerColumn" Header="Server" Width="240">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <ItemsControl ItemsSource="{Binding ServerSegments}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}" FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}" FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}" FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn x:Name="PreviewScoreColumn" Header="Score" Width="140" Visibility="Collapsed">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding ScoreSegments}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Color, Converter={StaticResource CssColorToBrushConverter}}" FontWeight="{Binding FontWeight, Converter={StaticResource CssFontWeightConverter}}" FontStyle="{Binding FontStyle, Converter={StaticResource CssFontStyleConverter}}" FontFamily="{Binding FontFamily, Converter={StaticResource CssFontFamilyConverter}}" FontSize="{Binding FontSize, Converter={StaticResource CssFontSizeConverter}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn x:Name="PreviewLBColumn" Header="LB" Width="90" Visibility="Collapsed">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ItemsControl ItemsSource="{Binding LBSegments}">
                                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>

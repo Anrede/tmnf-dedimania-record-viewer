@@ -27,6 +27,7 @@ namespace TmnfDedimaniaScraper;
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<OnlineRecordRowView> _rows = new();
+    private readonly ObservableCollection<OfflineRecordRowView> _offlineRows = new();
     private readonly ObservableCollection<RankTimeByRowView> _table1Rows = new();
     private readonly ObservableCollection<RankTimeByRowView> _table2Rows = new();
     private readonly ObservableCollection<SegmentRowView> _segments = new();
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
 
     private ExtractionResult? _lastExtraction;
     private OnlineRecord? _currentSelectedRecord;
+    private OfflineRecord? _currentSelectedOfflineRecord;
     private SegmentRowView? _currentSelectedSegment;
     private SelectionSource _currentSelectionSource = SelectionSource.None;
 
@@ -45,6 +47,7 @@ public partial class MainWindow : Window
     private bool _suppressStyleSelectionEvent;
     private Color? _pendingEditorColor;
     private string _currentTrackName = string.Empty;
+    private bool _showOfflineRecords;
 
     private const string AppFolderName = "TmnfDedimaniaScraper";
     private static string AppDataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolderName);
@@ -55,6 +58,11 @@ public partial class MainWindow : Window
     private bool _isRestoringState;
     private AppState? _loadedAppState;
     private bool _columnStateTrackingAttached;
+    private string _lastImportExportDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    private readonly Stack<AppState> _undoStack = new();
+    private readonly Stack<AppState> _redoStack = new();
+    private bool _isApplyingHistoryState;
+    private const int MaxHistoryStates = 100;
 
     public MainWindow()
     {
@@ -67,11 +75,14 @@ public partial class MainWindow : Window
         _saveStateTimer.Tick += SaveStateTimer_Tick;
 
         RecordsGrid.ItemsSource = _rows;
+        OfflineRecordsGrid.ItemsSource = _offlineRows;
         Table1Grid.ItemsSource = _table1Rows;
         Table2Grid.ItemsSource = _table2Rows;
         SegmentsGrid.ItemsSource = _segments;
         PreviewGrid.ItemsSource = _previewRows;
         ResetPreview();
+        SetRecordsTab(false);
+        UpdateMergeButtonState();
         BookmarksItemsControl.ItemsSource = _bookmarks;
         LoadBookmarks();
         _loadedAppState = LoadAppState();
@@ -82,6 +93,7 @@ public partial class MainWindow : Window
         LocationChanged += WindowGeometryChanged;
         SizeChanged += WindowGeometryChanged;
         StateChanged += WindowGeometryChanged;
+        PreviewKeyDown += Window_PreviewKeyDown;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -111,12 +123,140 @@ public partial class MainWindow : Window
 
     private void QueueSaveState()
     {
-        if (_isRestoringState)
+        if (_isRestoringState || _isApplyingHistoryState)
             return;
 
         _saveStateTimer.Stop();
         _saveStateTimer.Start();
     }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.Z)
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+                RedoLastChange();
+            else
+                UndoLastChange();
+
+            e.Handled = true;
+        }
+    }
+
+    private void OnlineTabButton_Click(object sender, RoutedEventArgs e) => SetRecordsTab(false);
+
+    private void OfflineTabButton_Click(object sender, RoutedEventArgs e) => SetRecordsTab(true);
+
+    private void SetRecordsTab(bool showOffline)
+    {
+        _showOfflineRecords = showOffline;
+        if (RecordsGrid is null || OfflineRecordsGrid is null)
+            return;
+
+        RecordsGrid.Visibility = showOffline ? Visibility.Collapsed : Visibility.Visible;
+        OfflineRecordsGrid.Visibility = showOffline ? Visibility.Visible : Visibility.Collapsed;
+
+        if (OnlineTabButton is not null)
+        {
+            OnlineTabButton.Opacity = showOffline ? 0.75 : 1.0;
+            OnlineTabButton.IsEnabled = showOffline;
+        }
+
+        if (OfflineTabButton is not null)
+        {
+            OfflineTabButton.Opacity = showOffline ? 1.0 : 0.75;
+            OfflineTabButton.IsEnabled = !showOffline;
+        }
+
+        QueueSaveState();
+    }
+
+    private void UpdateMergeButtonState()
+    {
+        if (MergeOfflineButton is null)
+            return;
+
+        MergeOfflineButton.IsEnabled = _offlineRows.Count > 0;
+        MergeOfflineButton.Opacity = MergeOfflineButton.IsEnabled ? 1.0 : 0.55;
+    }
+
+    private void PushUndoSnapshot()
+    {
+        if (_isRestoringState || _isApplyingHistoryState)
+            return;
+
+        _undoStack.Push(CaptureCurrentState(includeWindowGeometry: false, includeLayoutAndColumns: false));
+        while (_undoStack.Count > MaxHistoryStates)
+        {
+            var items = _undoStack.Take(MaxHistoryStates).Reverse().ToArray();
+            _undoStack.Clear();
+            foreach (var item in items)
+                _undoStack.Push(item);
+        }
+
+        _redoStack.Clear();
+    }
+
+    private void UndoLastChange()
+    {
+        if (_undoStack.Count == 0)
+            return;
+
+        var current = CaptureCurrentState(includeWindowGeometry: false, includeLayoutAndColumns: false);
+        _redoStack.Push(current);
+        var previous = _undoStack.Pop();
+        RestoreUndoRedoState(previous);
+        StatusText.Text = "Son değişiklik geri alındı.";
+    }
+
+    private void RedoLastChange()
+    {
+        if (_redoStack.Count == 0)
+            return;
+
+        var current = CaptureCurrentState(includeWindowGeometry: false, includeLayoutAndColumns: false);
+        _undoStack.Push(current);
+        var next = _redoStack.Pop();
+        RestoreUndoRedoState(next);
+        StatusText.Text = "Geri alınan değişiklik yeniden uygulandı.";
+    }
+
+    private void RestoreUndoRedoState(AppState state)
+    {
+        _isApplyingHistoryState = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(state.LastUrl))
+                UrlTextBox.Text = NormalizeUrl(state.LastUrl);
+
+            _currentPageTitle = state.LastPageTitle ?? string.Empty;
+            _lastImportExportDirectory = NormalizeExistingDirectory(state.LastImportExportDirectory);
+            _showOfflineRecords = state.ShowOfflineRecordsTab;
+            _currentTrackName = state.TrackName ?? string.Empty;
+
+            _bookmarks.Clear();
+            foreach (var bookmark in state.Bookmarks.Where(b => !string.IsNullOrWhiteSpace(b.Url)))
+                _bookmarks.Add(new BookmarkItem { Title = bookmark.Title ?? string.Empty, Url = bookmark.Url ?? string.Empty });
+            RefreshBookmarksBar();
+            RestoreResultState(state);
+            SetRecordsTab(_showOfflineRecords);
+            UpdateMergeButtonState();
+
+            Table1RankInput.Text = state.Table1InsertText ?? string.Empty;
+            Table2RankInput.Text = state.Table2InsertText ?? string.Empty;
+            UpdateTrackNameHeader(state.TrackName);
+            RestoreSelections(state.Selection);
+            RefreshAllViewTexts();
+            RenderCurrentPreview();
+        }
+        finally
+        {
+            _isApplyingHistoryState = false;
+        }
+
+        QueueSaveState();
+    }
+
 
     private void AttachColumnStateTracking()
     {
@@ -140,6 +280,7 @@ public partial class MainWindow : Window
     private IEnumerable<DataGrid> EnumerateStatefulGrids()
     {
         yield return RecordsGrid;
+        yield return OfflineRecordsGrid;
         yield return Table1Grid;
         yield return Table2Grid;
         yield return SegmentsGrid;
@@ -190,16 +331,16 @@ public partial class MainWindow : Window
             if (!string.IsNullOrWhiteSpace(state.LastPageTitle))
                 _currentPageTitle = state.LastPageTitle;
 
-            if (state.Bookmarks.Count > 0)
-            {
-                _bookmarks.Clear();
-                foreach (var bookmark in state.Bookmarks.Where(b => !string.IsNullOrWhiteSpace(b.Url)))
-                    _bookmarks.Add(new BookmarkItem { Title = bookmark.Title ?? string.Empty, Url = bookmark.Url ?? string.Empty });
+            _bookmarks.Clear();
+            foreach (var bookmark in state.Bookmarks.Where(b => !string.IsNullOrWhiteSpace(b.Url)))
+                _bookmarks.Add(new BookmarkItem { Title = bookmark.Title ?? string.Empty, Url = bookmark.Url ?? string.Empty });
+            RefreshBookmarksBar();
 
-                RefreshBookmarksBar();
-            }
-
+            _lastImportExportDirectory = NormalizeExistingDirectory(state.LastImportExportDirectory);
+            _showOfflineRecords = state.ShowOfflineRecordsTab;
             RestoreResultState(state);
+            SetRecordsTab(_showOfflineRecords);
+            UpdateMergeButtonState();
 
             Table1RankInput.Text = state.Table1InsertText ?? string.Empty;
             Table2RankInput.Text = state.Table2InsertText ?? string.Empty;
@@ -220,6 +361,7 @@ public partial class MainWindow : Window
         {
             ApplyColumnStates(state.ColumnWidths);
             RestoreSelections(state.Selection);
+            UpdateMergeButtonState();
         }
         finally
         {
@@ -247,10 +389,12 @@ public partial class MainWindow : Window
     {
         UnhookSegmentRows();
         _rows.Clear();
+        _offlineRows.Clear();
         _table1Rows.Clear();
         _table2Rows.Clear();
         _segments.Clear();
         _currentSelectedRecord = null;
+        _currentSelectedOfflineRecord = null;
         _currentSelectedSegment = null;
         _currentSelectionSource = SelectionSource.None;
 
@@ -266,6 +410,19 @@ public partial class MainWindow : Window
                 EnsureEditableSegments(record.By);
                 EnsureEditableSegments(record.Server);
                 _rows.Add(new OnlineRecordRowView(record));
+            }
+        }
+
+        if (_lastExtraction?.OfflineRecords is not null)
+        {
+            foreach (var record in _lastExtraction.OfflineRecords.Take(10))
+            {
+                EnsureEditableSegments(record.Rank);
+                EnsureEditableSegments(record.Time);
+                EnsureEditableSegments(record.By);
+                EnsureEditableSegments(record.Score);
+                EnsureEditableSegments(record.LB);
+                _offlineRows.Add(new OfflineRecordRowView(record));
             }
         }
 
@@ -289,8 +446,9 @@ public partial class MainWindow : Window
         RenumberCustomTable(_table2Rows);
 
         UpdateTrackNameHeader(state.TrackName);
+        UpdatePreviewColumnsVisibility();
 
-        if (_rows.Count == 0 && _table1Rows.Count == 0 && _table2Rows.Count == 0)
+        if (_rows.Count == 0 && _offlineRows.Count == 0 && _table1Rows.Count == 0 && _table2Rows.Count == 0)
             ResetPreview();
     }
 
@@ -300,6 +458,7 @@ public partial class MainWindow : Window
             return;
 
         int recordsIndex = CoerceIndex(selection.RecordsSelectedIndex, _rows.Count);
+        int offlineRecordsIndex = CoerceIndex(selection.OfflineRecordsSelectedIndex, _offlineRows.Count);
         int table1Index = CoerceIndex(selection.Table1SelectedIndex, _table1Rows.Count);
         int table2Index = CoerceIndex(selection.Table2SelectedIndex, _table2Rows.Count);
 
@@ -311,12 +470,17 @@ public partial class MainWindow : Window
             case SelectionSource.Table2 when table2Index >= 0:
                 Table2Grid.SelectedIndex = table2Index;
                 break;
+            case SelectionSource.OfflineRecord when offlineRecordsIndex >= 0:
+                OfflineRecordsGrid.SelectedIndex = offlineRecordsIndex;
+                break;
             case SelectionSource.FullRecord when recordsIndex >= 0:
                 RecordsGrid.SelectedIndex = recordsIndex;
                 break;
             default:
                 if (recordsIndex >= 0)
                     RecordsGrid.SelectedIndex = recordsIndex;
+                else if (offlineRecordsIndex >= 0)
+                    OfflineRecordsGrid.SelectedIndex = offlineRecordsIndex;
                 break;
         }
 
@@ -372,45 +536,13 @@ public partial class MainWindow : Window
 
     private void SaveAppStateImmediate()
     {
-        if (_isRestoringState)
+        if (_isRestoringState || _isApplyingHistoryState)
             return;
 
         try
         {
             Directory.CreateDirectory(AppDataDirectory);
-
-            Rect bounds = WindowState == WindowState.Normal
-                ? new Rect(Left, Top, Width, Height)
-                : RestoreBounds;
-
-            var state = new AppState
-            {
-                WindowLeft = bounds.Left,
-                WindowTop = bounds.Top,
-                WindowWidth = bounds.Width,
-                WindowHeight = bounds.Height,
-                WindowState = WindowState == System.Windows.WindowState.Maximized ? nameof(System.Windows.WindowState.Maximized) : nameof(System.Windows.WindowState.Normal),
-                LastUrl = GetCurrentUrl(),
-                LastPageTitle = _currentPageTitle,
-                TrackName = _currentTrackName,
-                LastExtraction = _lastExtraction is null ? null : ExtractionResultCloner.Clone(_lastExtraction),
-                Table1Rows = _table1Rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList(),
-                Table2Rows = _table2Rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList(),
-                Bookmarks = _bookmarks.Select(b => new BookmarkStateItem { Title = b.Title, Url = b.Url }).ToList(),
-                Table1InsertText = Table1RankInput.Text ?? string.Empty,
-                Table2InsertText = Table2RankInput.Text ?? string.Empty,
-                Selection = new SelectionState
-                {
-                    Source = _currentSelectionSource,
-                    RecordsSelectedIndex = RecordsGrid.SelectedIndex,
-                    Table1SelectedIndex = Table1Grid.SelectedIndex,
-                    Table2SelectedIndex = Table2Grid.SelectedIndex,
-                    SegmentsSelectedIndex = SegmentsGrid.SelectedIndex
-                },
-                ColumnWidths = CaptureColumnWidths(),
-                LayoutLengths = CaptureLayoutLengths()
-            };
-
+            var state = CaptureCurrentState(includeWindowGeometry: true, includeLayoutAndColumns: true);
             File.WriteAllText(AppStateFilePath, JsonSerializer.Serialize(state, JsonOptions));
             File.WriteAllText(BookmarksFilePath, JsonSerializer.Serialize(_bookmarks, JsonOptions));
         }
@@ -418,6 +550,65 @@ public partial class MainWindow : Window
         {
             StatusText.Text = $"Durum kaydedilemedi: {ex.Message}";
         }
+    }
+
+    private AppState CaptureCurrentState(bool includeWindowGeometry, bool includeLayoutAndColumns)
+    {
+        Rect bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, Width, Height)
+            : RestoreBounds;
+
+        var state = new AppState
+        {
+            WindowLeft = includeWindowGeometry ? SanitizeFiniteDouble(bounds.Left) : 0,
+            WindowTop = includeWindowGeometry ? SanitizeFiniteDouble(bounds.Top) : 0,
+            WindowWidth = includeWindowGeometry ? SanitizeFiniteDouble(bounds.Width) : 0,
+            WindowHeight = includeWindowGeometry ? SanitizeFiniteDouble(bounds.Height) : 0,
+            WindowState = WindowState == System.Windows.WindowState.Maximized ? nameof(System.Windows.WindowState.Maximized) : nameof(System.Windows.WindowState.Normal),
+            LastUrl = GetCurrentUrl(),
+            LastPageTitle = _currentPageTitle,
+            TrackName = _currentTrackName,
+            LastExtraction = _lastExtraction is null ? null : ExtractionResultCloner.Clone(_lastExtraction),
+            Table1Rows = _table1Rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList(),
+            Table2Rows = _table2Rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList(),
+            Bookmarks = _bookmarks.Select(b => new BookmarkStateItem { Title = b.Title, Url = b.Url }).ToList(),
+            Table1InsertText = Table1RankInput.Text ?? string.Empty,
+            Table2InsertText = Table2RankInput.Text ?? string.Empty,
+            LastImportExportDirectory = _lastImportExportDirectory,
+            ShowOfflineRecordsTab = _showOfflineRecords,
+            Selection = new SelectionState
+            {
+                Source = _currentSelectionSource,
+                RecordsSelectedIndex = RecordsGrid.SelectedIndex,
+                OfflineRecordsSelectedIndex = OfflineRecordsGrid.SelectedIndex,
+                Table1SelectedIndex = Table1Grid.SelectedIndex,
+                Table2SelectedIndex = Table2Grid.SelectedIndex,
+                SegmentsSelectedIndex = SegmentsGrid.SelectedIndex
+            },
+            ColumnWidths = includeLayoutAndColumns ? CaptureColumnWidths() : new List<GridColumnState>(),
+            LayoutLengths = includeLayoutAndColumns ? CaptureLayoutLengths() : new List<LayoutLengthState>()
+        };
+
+        return DeepCloneState(state);
+    }
+
+    private static AppState DeepCloneState(AppState state)
+    {
+        return JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(state, JsonOptions), JsonOptions) ?? new AppState();
+    }
+
+
+    private static double SanitizeFiniteDouble(double value)
+    {
+        return double.IsFinite(value) ? value : 0d;
+    }
+
+    private static string NormalizeExistingDirectory(string? directory)
+    {
+        if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+            return directory;
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     private List<GridColumnState> CaptureColumnWidths()
@@ -435,7 +626,7 @@ public partial class MainWindow : Window
                     ColumnIndex = i,
                     DisplayIndex = grid.Columns[i].DisplayIndex,
                     Header = grid.Columns[i].Header?.ToString() ?? string.Empty,
-                    Width = grid.Columns[i].ActualWidth > 0 ? grid.Columns[i].ActualWidth : grid.Columns[i].Width.DisplayValue
+                    Width = SanitizeFiniteDouble(grid.Columns[i].ActualWidth > 0 ? grid.Columns[i].ActualWidth : grid.Columns[i].Width.DisplayValue)
                 });
             }
         }
@@ -649,8 +840,9 @@ public partial class MainWindow : Window
             }
 
             ScrapeButton.IsEnabled = false;
+            PushUndoSnapshot();
             ClearCurrentResults();
-            StatusText.Text = "Online records bölümü aranıyor (maks. 3 sn)...";
+            StatusText.Text = "Online / Offline records bölümü aranıyor (maks. 3 sn)...";
 
             var extraction = await TryExtractAsync(TimeSpan.FromSeconds(3));
             _lastExtraction = extraction;
@@ -663,7 +855,7 @@ public partial class MainWindow : Window
                 ResetPreview();
 
             StatusText.Text = extraction.Success
-                ? $"{extraction.Records.Count} kayıt çekildi. Tablo 1 ve Tablo 2 otomatik dolduruldu. İstersen konuma göre boş satır ekleyebilirsin."
+                ? $"Online: {extraction.Records.Count}, Offline: {extraction.OfflineRecords.Count} kayıt çekildi."
                 : $"Sonuç yok: {extraction.Message}";
 
             QueueSaveState();
@@ -687,9 +879,11 @@ public partial class MainWindow : Window
         {
             if (_pageReady)
             {
-                var result = await ExecuteExtractionScriptAsync();
-                if (result.Success && result.Records.Count > 0)
-                    return result;
+                var onlineResult = await ExecuteOnlineExtractionScriptAsync();
+                var offlineResult = await ExecuteOfflineExtractionScriptAsync();
+                var merged = MergeExtractionResults(onlineResult, offlineResult);
+                if (merged.Success && (merged.Records.Count > 0 || merged.OfflineRecords.Count > 0))
+                    return merged;
             }
 
             await Task.Delay(500);
@@ -698,15 +892,53 @@ public partial class MainWindow : Window
         return new ExtractionResult
         {
             Success = false,
-            Message = "3 saniye içinde online records tablosu bulunamadı. Track için online record olmayabilir veya sayfa yapısı değişmiş olabilir."
+            Message = "3 saniye içinde online/offline records tablosu bulunamadı. Track için kayıt olmayabilir veya sayfa yapısı değişmiş olabilir."
         };
     }
 
-    private async Task<ExtractionResult> ExecuteExtractionScriptAsync()
+    private async Task<ExtractionResult> ExecuteOnlineExtractionScriptAsync()
     {
-        string rawJson = await Browser.ExecuteScriptAsync(JsExtractionScript);
-        return JsonSerializer.Deserialize<ExtractionResult>(rawJson, JsonOptions)
-               ?? new ExtractionResult { Success = false, Message = "JavaScript sonucu çözümlenemedi." };
+        try
+        {
+            string rawJson = await Browser.ExecuteScriptAsync(JsExtractionScript);
+            return JsonSerializer.Deserialize<ExtractionResult>(rawJson, JsonOptions)
+                   ?? new ExtractionResult { Success = false, Message = "Online JavaScript sonucu çözümlenemedi." };
+        }
+        catch (Exception ex)
+        {
+            return new ExtractionResult { Success = false, Message = $"Online script hatası: {ex.Message}" };
+        }
+    }
+
+    private async Task<OfflineExtractionResult> ExecuteOfflineExtractionScriptAsync()
+    {
+        try
+        {
+            string rawJson = await Browser.ExecuteScriptAsync(JsOfflineExtractionScript);
+            return JsonSerializer.Deserialize<OfflineExtractionResult>(rawJson, JsonOptions)
+                   ?? new OfflineExtractionResult { Success = false, Message = "Offline JavaScript sonucu çözümlenemedi." };
+        }
+        catch (Exception ex)
+        {
+            return new OfflineExtractionResult { Success = false, Message = $"Offline script hatası: {ex.Message}" };
+        }
+    }
+
+    private static ExtractionResult MergeExtractionResults(ExtractionResult online, OfflineExtractionResult offline)
+    {
+        string trackName = !string.IsNullOrWhiteSpace(online.TrackName) ? online.TrackName : offline.TrackName;
+        return new ExtractionResult
+        {
+            Success = (online.Success && online.Records.Count > 0) || (offline.Success && offline.Records.Count > 0),
+            Message = (online.Success && online.Records.Count > 0) || (offline.Success && offline.Records.Count > 0)
+                ? $"Online: {online.Records.Count} / Offline: {offline.Records.Count}"
+                : (!string.IsNullOrWhiteSpace(online.Message) ? online.Message : offline.Message),
+            TrackName = trackName,
+            RecordCount = online.Records.Count,
+            OfflineRecordCount = (offline.Records ?? new List<OfflineRecord>()).Take(10).Count(),
+            Records = online.Records ?? new List<OnlineRecord>(),
+            OfflineRecords = (offline.Records ?? new List<OfflineRecord>()).Take(10).ToList()
+        };
     }
 
     private void ClearCurrentResults()
@@ -714,10 +946,12 @@ public partial class MainWindow : Window
         UnhookSegmentRows();
         _lastExtraction = null;
         _rows.Clear();
+        _offlineRows.Clear();
         _table1Rows.Clear();
         _table2Rows.Clear();
         _segments.Clear();
         _currentSelectedRecord = null;
+        _currentSelectedOfflineRecord = null;
         _currentSelectedSegment = null;
         _currentSelectionSource = SelectionSource.None;
         _pendingEditorColor = null;
@@ -726,6 +960,7 @@ public partial class MainWindow : Window
 
         _isSynchronizingSelections = true;
         RecordsGrid.SelectedItem = null;
+        OfflineRecordsGrid.SelectedItem = null;
         Table1Grid.SelectedItem = null;
         Table2Grid.SelectedItem = null;
         SegmentsGrid.SelectedItem = null;
@@ -733,11 +968,13 @@ public partial class MainWindow : Window
 
         ResetPreview();
         ResetSelectedSegmentEditor();
+        UpdateMergeButtonState();
     }
 
     private void FillGrids(ExtractionResult extraction)
     {
         _rows.Clear();
+        _offlineRows.Clear();
         _table1Rows.Clear();
         _table2Rows.Clear();
 
@@ -750,17 +987,290 @@ public partial class MainWindow : Window
             EnsureEditableSegments(record.Server);
 
             _rows.Add(new OnlineRecordRowView(record));
+        }
+
+        foreach (var record in extraction.OfflineRecords.Take(10))
+        {
+            EnsureEditableSegments(record.Rank);
+            EnsureEditableSegments(record.Time);
+            EnsureEditableSegments(record.By);
+            EnsureEditableSegments(record.Score);
+            EnsureEditableSegments(record.LB);
+            _offlineRows.Add(new OfflineRecordRowView(record));
+        }
+
+        PopulateOnlineCustomTables(extraction.Records);
+        UpdateMergeButtonState();
+
+        if (_rows.Count > 0)
+        {
+            RecordsGrid.SelectedIndex = 0;
+            SetRecordsTab(false);
+        }
+        else if (_offlineRows.Count > 0)
+        {
+            OfflineRecordsGrid.SelectedIndex = 0;
+            SetRecordsTab(true);
+        }
+        else
+        {
+            ResetPreview();
+        }
+    }
+
+    private void PopulateOnlineCustomTables(IEnumerable<OnlineRecord> onlineRecords)
+    {
+        _table1Rows.Clear();
+        _table2Rows.Clear();
+
+        foreach (var record in onlineRecords.Select(OnlineRecordCloner.CloneRankTimeByRecord))
+        {
             _table1Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Tablo 1"));
             _table2Rows.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), "Tablo 2"));
         }
 
         RenumberCustomTable(_table1Rows);
         RenumberCustomTable(_table2Rows);
+    }
 
-        if (_rows.Count > 0)
-            RecordsGrid.SelectedIndex = 0;
+    private void MergeOfflineButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastExtraction is null)
+        {
+            MessageBox.Show("Önce verileri çek.");
+            return;
+        }
+
+        if ((_lastExtraction.OfflineRecords?.Count ?? 0) == 0)
+        {
+            MessageBox.Show("Birleştirilecek offline kayıt bulunamadı.");
+            return;
+        }
+
+        PushUndoSnapshot();
+        ReplaceCustomTableWithMergedData(_table1Rows, "Tablo 1");
+        ReplaceCustomTableWithMergedData(_table2Rows, "Tablo 2");
+
+        if (_table1Rows.Count > 0 && Table1Grid.SelectedIndex < 0)
+            Table1Grid.SelectedIndex = 0;
+        if (_table2Rows.Count > 0 && Table2Grid.SelectedIndex < 0)
+            Table2Grid.SelectedIndex = 0;
+
+        StatusText.Text = $"Offline kayıtlar Tablo 1 ve Tablo 2 ile birleştirildi ({_lastExtraction.OfflineRecords.Count} offline).";
+        QueueSaveState();
+    }
+
+    private void ReplaceCustomTableWithMergedData(ObservableCollection<RankTimeByRowView> target, string tableName)
+    {
+        if (_lastExtraction is null)
+            return;
+
+        List<OnlineRecord> records = target.Count == 0
+            ? BuildOfflineOnlyRankTimeByRecords(_lastExtraction.OfflineRecords)
+            : BuildMergedRankTimeByRecords(_lastExtraction.Records, _lastExtraction.OfflineRecords);
+
+        target.Clear();
+        foreach (var record in records)
+            target.Add(new RankTimeByRowView(OnlineRecordCloner.CloneRankTimeByRecord(record), tableName));
+
+        RenumberCustomTable(target);
+    }
+
+    private static List<OnlineRecord> BuildOfflineOnlyRankTimeByRecords(IEnumerable<OfflineRecord> offlineRecords)
+    {
+        return offlineRecords
+            .Take(10)
+            .Select(ConvertOfflineRecordToRankTimeByRecord)
+            .OrderBy(record => NormalizeComparableTime(GetComparableTimeText(record, isOfflineSource: false)) ?? int.MaxValue)
+            .ToList();
+    }
+
+    private static List<OnlineRecord> BuildMergedRankTimeByRecords(IEnumerable<OnlineRecord> onlineRecords, IEnumerable<OfflineRecord> offlineRecords)
+    {
+        var onlineList = onlineRecords.Select(OnlineRecordCloner.CloneRankTimeByRecord).ToList();
+        var offlineList = offlineRecords.Take(10).ToList();
+
+        if (onlineList.Count == 0)
+        {
+            return offlineList
+                .Select(ConvertOfflineRecordToRankTimeByRecord)
+                .OrderBy(record => NormalizeComparableTime(GetComparableTimeText(record, isOfflineSource: false)) ?? int.MaxValue)
+                .ToList();
+        }
+
+        var onlineTimes = new HashSet<int>(
+            onlineList
+                .Select(record => NormalizeComparableTime(GetComparableTimeText(record, isOfflineSource: false)))
+                .Where(value => value.HasValue)
+                .Select(value => value!.Value));
+
+        var mergedItems = new List<MergedRankTimeByItem>();
+
+        for (int i = 0; i < onlineList.Count; i++)
+        {
+            var record = onlineList[i];
+            mergedItems.Add(new MergedRankTimeByItem(
+                record,
+                NormalizeComparableTime(GetComparableTimeText(record, isOfflineSource: false)),
+                i,
+                IsOffline: false));
+        }
+
+        for (int i = 0; i < offlineList.Count; i++)
+        {
+            var source = offlineList[i];
+            string comparableTimeText = GetComparableTimeText(source, isOfflineSource: true);
+            int? normalizedTime = NormalizeComparableTime(comparableTimeText);
+
+            if (normalizedTime.HasValue && onlineTimes.Contains(normalizedTime.Value))
+                continue;
+
+            mergedItems.Add(new MergedRankTimeByItem(
+                ConvertOfflineRecordToRankTimeByRecord(source),
+                normalizedTime,
+                i,
+                IsOffline: true));
+        }
+
+        return mergedItems
+            .OrderBy(item => item.NormalizedTime ?? int.MaxValue)
+            .ThenBy(item => item.OriginalIndex)
+            .ThenBy(item => item.IsOffline ? 1 : 0)
+            .Select(item => item.Record)
+            .ToList();
+    }
+
+    private static string GetComparableTimeText(OnlineRecord record, bool isOfflineSource)
+    {
+        return isOfflineSource
+            ? BuildPrimaryOfflineTimeText(record.Time)
+            : CellDataUtilities.BuildCellText(record.Time);
+    }
+
+    private static string GetComparableTimeText(OfflineRecord record, bool isOfflineSource)
+    {
+        return isOfflineSource
+            ? BuildPrimaryOfflineTimeText(record.Time)
+            : CellDataUtilities.BuildCellText(record.Time);
+    }
+
+    private static string BuildPrimaryOfflineTimeText(CellData timeCell)
+    {
+        if (timeCell.Segments.Count > 0)
+        {
+            foreach (var segment in timeCell.Segments)
+            {
+                string text = segment.Text?.Trim() ?? string.Empty;
+                if (IsPrimaryTimeSegmentText(text))
+                    return text;
+            }
+
+            string firstSegmentText = timeCell.Segments[0].Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(firstSegmentText))
+                return firstSegmentText;
+        }
+
+        return CellDataUtilities.BuildCellText(timeCell).Trim();
+    }
+
+    private static bool IsPrimaryTimeSegmentText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        return Regex.IsMatch(text, @"^\d{2}:\d{2}\.\d{2}$");
+    }
+
+    private static int? NormalizeComparableTime(string? rawTime)
+    {
+        string digits = new string((rawTime ?? string.Empty)
+            .Where(char.IsDigit)
+            .ToArray());
+
+        if (string.IsNullOrWhiteSpace(digits))
+            return null;
+
+        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value)
+            ? value
+            : null;
+    }
+
+    private static OnlineRecord ConvertOfflineRecordToRankTimeByRecord(OfflineRecord source)
+    {
+        var converted = new OnlineRecord
+        {
+            Rank = OnlineRecordCloner.CloneCell(source.Rank),
+            Time = ClonePrimaryOfflineTimeCell(source.Time),
+            By = OnlineRecordCloner.CloneCell(source.By),
+            Mode = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() },
+            Server = new CellData { Text = string.Empty, Html = string.Empty, Segments = new List<TextSegment>() }
+        };
+
+        converted.Time.Text = BuildPrimaryOfflineTimeText(converted.Time);
+        ApplyOfflineCustomTableStyling(converted.Time);
+        ApplyOfflineCustomTableStyling(converted.By);
+        return converted;
+    }
+
+    private static void ApplyOfflineCustomTableStyling(CellData cell)
+    {
+        const string targetColor = "rgb(238, 238, 238)";
+
+        if (cell.Segments.Count == 0)
+        {
+            cell.Segments.Add(new TextSegment
+            {
+                Text = cell.Text ?? string.Empty,
+                Color = targetColor,
+                BackgroundColor = "rgba(0, 0, 0, 0)",
+                FontWeight = "400",
+                FontStyle = "normal",
+                TextDecoration = "none",
+                FontFamily = "Segoe UI",
+                FontSize = "14px",
+                ClassName = string.Empty,
+                Tag = "span"
+            });
+        }
         else
-            ResetPreview();
+        {
+            foreach (var segment in cell.Segments)
+                segment.Color = targetColor;
+        }
+
+        cell.Text = CellDataUtilities.BuildCellText(cell);
+    }
+
+    private static CellData ClonePrimaryOfflineTimeCell(CellData source)
+    {
+        var clone = new CellData
+        {
+            Text = string.Empty,
+            Html = source.Html,
+            Segments = new List<TextSegment>()
+        };
+
+        TextSegment? primarySegment = source.Segments
+            .Select(OnlineRecordCloner.CloneSegment)
+            .FirstOrDefault(segment => IsPrimaryTimeSegmentText(segment.Text?.Trim() ?? string.Empty));
+
+        if (primarySegment is not null)
+        {
+            primarySegment.Text = primarySegment.Text?.Trim() ?? string.Empty;
+            clone.Segments.Add(primarySegment);
+        }
+        else if (source.Segments.Count > 0)
+        {
+            TextSegment fallback = OnlineRecordCloner.CloneSegment(source.Segments[0]);
+            fallback.Text = fallback.Text?.Trim() ?? string.Empty;
+            clone.Segments.Add(fallback);
+        }
+
+        clone.Text = clone.Segments.Count > 0
+            ? clone.Segments[0].Text
+            : BuildPrimaryOfflineTimeText(source);
+
+        return clone;
     }
 
     private static void EnsureEditableSegments(CellData cell)
@@ -796,7 +1306,20 @@ public partial class MainWindow : Window
         if (RecordsGrid.SelectedItem is OnlineRecordRowView row)
         {
             SynchronizeActiveGrid(RecordsGrid);
-            SelectRecord(row.Source, SelectionSource.FullRecord);
+            SelectOnlineRecord(row.Source, SelectionSource.FullRecord);
+            QueueSaveState();
+        }
+    }
+
+    private void OfflineRecordsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingSelections)
+            return;
+
+        if (OfflineRecordsGrid.SelectedItem is OfflineRecordRowView row)
+        {
+            SynchronizeActiveGrid(OfflineRecordsGrid);
+            SelectOfflineRecord(row.Source);
             QueueSaveState();
         }
     }
@@ -809,7 +1332,7 @@ public partial class MainWindow : Window
         if (Table1Grid.SelectedItem is RankTimeByRowView row)
         {
             SynchronizeActiveGrid(Table1Grid);
-            SelectRecord(row.Source, SelectionSource.Table1);
+            SelectOnlineRecord(row.Source, SelectionSource.Table1);
             QueueSaveState();
         }
     }
@@ -822,7 +1345,7 @@ public partial class MainWindow : Window
         if (Table2Grid.SelectedItem is RankTimeByRowView row)
         {
             SynchronizeActiveGrid(Table2Grid);
-            SelectRecord(row.Source, SelectionSource.Table2);
+            SelectOnlineRecord(row.Source, SelectionSource.Table2);
             QueueSaveState();
         }
     }
@@ -833,6 +1356,7 @@ public partial class MainWindow : Window
         try
         {
             if (!ReferenceEquals(activeGrid, RecordsGrid)) RecordsGrid.SelectedItem = null;
+            if (!ReferenceEquals(activeGrid, OfflineRecordsGrid)) OfflineRecordsGrid.SelectedItem = null;
             if (!ReferenceEquals(activeGrid, Table1Grid)) Table1Grid.SelectedItem = null;
             if (!ReferenceEquals(activeGrid, Table2Grid)) Table2Grid.SelectedItem = null;
         }
@@ -842,9 +1366,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SelectRecord(OnlineRecord? record, SelectionSource source)
+    private void SelectOnlineRecord(OnlineRecord? record, SelectionSource source)
     {
         _currentSelectedRecord = record;
+        _currentSelectedOfflineRecord = null;
         _currentSelectionSource = source;
 
         _suppressSegmentChangeHandling = true;
@@ -866,13 +1391,52 @@ public partial class MainWindow : Window
         }
 
         _suppressSegmentChangeHandling = false;
-
+        UpdatePreviewColumnsVisibility();
         RenderCurrentPreview();
 
         if (_segments.Count > 0)
             SegmentsGrid.SelectedIndex = 0;
         else
             ResetSelectedSegmentEditor();
+    }
+
+    private void SelectOfflineRecord(OfflineRecord? record)
+    {
+        _currentSelectedOfflineRecord = record;
+        _currentSelectedRecord = null;
+        _currentSelectionSource = SelectionSource.OfflineRecord;
+
+        _suppressSegmentChangeHandling = true;
+        UnhookSegmentRows();
+        _segments.Clear();
+
+        if (record is not null)
+        {
+            AddSegments("#", record.Rank);
+            AddSegments("Time", record.Time);
+            AddSegments("By", record.By);
+            AddSegments("Score", record.Score);
+            AddSegments("LB", record.LB);
+        }
+
+        _suppressSegmentChangeHandling = false;
+        UpdatePreviewColumnsVisibility();
+        RenderCurrentPreview();
+
+        if (_segments.Count > 0)
+            SegmentsGrid.SelectedIndex = 0;
+        else
+            ResetSelectedSegmentEditor();
+    }
+
+    private void UpdatePreviewColumnsVisibility()
+    {
+        bool showOfflineColumns = _currentSelectionSource == SelectionSource.OfflineRecord;
+
+        if (PreviewModeColumn is not null) PreviewModeColumn.Visibility = showOfflineColumns ? Visibility.Collapsed : Visibility.Visible;
+        if (PreviewServerColumn is not null) PreviewServerColumn.Visibility = showOfflineColumns ? Visibility.Collapsed : Visibility.Visible;
+        if (PreviewScoreColumn is not null) PreviewScoreColumn.Visibility = showOfflineColumns ? Visibility.Visible : Visibility.Collapsed;
+        if (PreviewLBColumn is not null) PreviewLBColumn.Visibility = showOfflineColumns ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void AddSegments(string cellName, CellData cell)
@@ -913,11 +1477,19 @@ public partial class MainWindow : Window
         foreach (var row in _rows)
             row.RefreshFromSource();
 
+        foreach (var row in _offlineRows)
+            row.RefreshFromSource();
+
         foreach (var row in _table1Rows)
             row.RefreshFromSource();
 
         foreach (var row in _table2Rows)
             row.RefreshFromSource();
+    }
+
+    private void SegmentsGrid_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
+    {
+        PushUndoSnapshot();
     }
 
     private void SegmentsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -943,7 +1515,7 @@ public partial class MainWindow : Window
             ResetEditorColorInputs();
 
         _suppressStyleSelectionEvent = true;
-        SegmentStyleComboBox.SelectedIndex = row.FontStyle.Contains("italic", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        SetSegmentStyleMenuContent(row.FontStyle.Contains("italic", StringComparison.OrdinalIgnoreCase) ? "italic" : "normal");
         _suppressStyleSelectionEvent = false;
     }
 
@@ -953,8 +1525,41 @@ public partial class MainWindow : Window
         ResetEditorColorInputs();
 
         _suppressStyleSelectionEvent = true;
-        SegmentStyleComboBox.SelectedIndex = -1;
+        SetSegmentStyleMenuContent(null);
         _suppressStyleSelectionEvent = false;
+    }
+
+    private void SetSegmentStyleMenuContent(string? style)
+    {
+        string label = string.IsNullOrWhiteSpace(style) ? "Stil" : style.Trim();
+        SegmentStyleMenuButton.Content = $"{label} ▾";
+    }
+
+    private void SegmentStyleMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.ContextMenu is ContextMenu menu)
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        }
+    }
+
+    private void SegmentStyleMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressStyleSelectionEvent || _currentSelectedSegment is null || sender is not MenuItem menuItem)
+            return;
+
+        string nextStyle = (menuItem.Header?.ToString() ?? "normal").Trim();
+        string currentStyle = _currentSelectedSegment.FontStyle?.Trim() ?? string.Empty;
+        if (string.Equals(currentStyle, nextStyle, StringComparison.OrdinalIgnoreCase))
+        {
+            SetSegmentStyleMenuContent(nextStyle);
+            return;
+        }
+
+        PushUndoSnapshot();
+        _currentSelectedSegment.FontStyle = nextStyle;
+        SetSegmentStyleMenuContent(nextStyle);
     }
 
     private void ResetEditorColorInputs()
@@ -975,15 +1580,6 @@ public partial class MainWindow : Window
         GreenTextBox.Text = color.G.ToString(CultureInfo.InvariantCulture);
         BlueTextBox.Text = color.B.ToString(CultureInfo.InvariantCulture);
 
-    }
-
-    private void SegmentStyleComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressStyleSelectionEvent || _currentSelectedSegment is null)
-            return;
-
-        if (SegmentStyleComboBox.SelectedItem is ComboBoxItem comboItem)
-            _currentSelectedSegment.FontStyle = comboItem.Content?.ToString() ?? "normal";
     }
 
     private void SelectedColorPreviewBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -1025,8 +1621,16 @@ public partial class MainWindow : Window
         }
 
         var selectedColor = Color.FromRgb(r, g, b);
+        string nextCss = CssColorHelper.ToCssRgb(selectedColor);
+        if (string.Equals(_currentSelectedSegment.Color, nextCss, StringComparison.OrdinalIgnoreCase))
+        {
+            SetPendingEditorColor(selectedColor, true);
+            return;
+        }
+
+        PushUndoSnapshot();
         SetPendingEditorColor(selectedColor, true);
-        _currentSelectedSegment.Color = CssColorHelper.ToCssRgb(selectedColor);
+        _currentSelectedSegment.Color = nextCss;
     }
 
 
@@ -1042,10 +1646,23 @@ public partial class MainWindow : Window
     private void RenderCurrentPreview()
     {
         _previewRows.Clear();
+        UpdatePreviewColumnsVisibility();
+
+        if (_currentSelectionSource == SelectionSource.OfflineRecord)
+        {
+            if (_currentSelectedOfflineRecord is null)
+            {
+                _previewRows.Add(PreviewRecordRowView.CreatePlaceholder(true));
+                return;
+            }
+
+            _previewRows.Add(PreviewRecordRowView.FromOfflineRecord(_currentSelectedOfflineRecord));
+            return;
+        }
 
         if (_currentSelectedRecord is null)
         {
-            _previewRows.Add(PreviewRecordRowView.CreatePlaceholder());
+            _previewRows.Add(PreviewRecordRowView.CreatePlaceholder(false));
             return;
         }
 
@@ -1055,7 +1672,8 @@ public partial class MainWindow : Window
     private void ResetPreview()
     {
         _previewRows.Clear();
-        _previewRows.Add(PreviewRecordRowView.CreatePlaceholder());
+        UpdatePreviewColumnsVisibility();
+        _previewRows.Add(PreviewRecordRowView.CreatePlaceholder(_currentSelectionSource == SelectionSource.OfflineRecord));
     }
 
     private static FontWeight ToFontWeight(string? cssValue) => MainWindowFontConverters.ToFontWeight(cssValue);
@@ -1275,14 +1893,16 @@ public partial class MainWindow : Window
         {
             Title = "Çekilen kayıtları dışa aktar",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-            FileName = $"{safeTrackName}-records.txt",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            FileName = $"{safeTrackName} - records.txt",
+            InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
             AddExtension = true,
             DefaultExt = ".txt"
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
+
+        _lastImportExportDirectory = NormalizeExistingDirectory(Path.GetDirectoryName(dialog.FileName));
 
         var payload = new TableFilePayload
         {
@@ -1295,6 +1915,7 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName)!);
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(payload, JsonOptions));
         StatusText.Text = $"Çekilen kayıtlar dışa aktarıldı: {Path.GetFileName(dialog.FileName)}";
+        QueueSaveState();
     }
 
     private void ImportRecordsTable()
@@ -1304,13 +1925,16 @@ public partial class MainWindow : Window
         {
             Title = "Çekilen kayıtları içe aktar",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-            FileName = $"{safeTrackName}-records.txt",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            FileName = $"{safeTrackName} - records.txt",
+            InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
             CheckFileExists = true
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
+
+        _lastImportExportDirectory = NormalizeExistingDirectory(Path.GetDirectoryName(dialog.FileName));
+        PushUndoSnapshot();
 
         try
         {
@@ -1369,14 +1993,16 @@ public partial class MainWindow : Window
         {
             Title = $"{tableName} dışa aktar",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-            FileName = $"{safeTrackName}-{tableNumber}.txt",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            FileName = $"{safeTrackName} - table{tableNumber}.txt",
+            InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
             AddExtension = true,
             DefaultExt = ".txt"
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
+
+        _lastImportExportDirectory = NormalizeExistingDirectory(Path.GetDirectoryName(dialog.FileName));
 
         var payload = new TableFilePayload
         {
@@ -1389,6 +2015,7 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName)!);
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(payload, JsonOptions));
         StatusText.Text = $"{tableName} dışa aktarıldı: {Path.GetFileName(dialog.FileName)}";
+        QueueSaveState();
     }
 
     private void ImportCustomTable(ObservableCollection<RankTimeByRowView> target, DataGrid grid, int tableNumber, string tableName, SelectionSource selectionSource)
@@ -1398,13 +2025,16 @@ public partial class MainWindow : Window
         {
             Title = $"{tableName} içe aktar",
             Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-            FileName = $"{safeTrackName}-{tableNumber}.txt",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            FileName = $"{safeTrackName} - table{tableNumber}.txt",
+            InitialDirectory = NormalizeExistingDirectory(_lastImportExportDirectory),
             CheckFileExists = true
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
+
+        _lastImportExportDirectory = NormalizeExistingDirectory(Path.GetDirectoryName(dialog.FileName));
+        PushUndoSnapshot();
 
         try
         {
@@ -1489,6 +2119,7 @@ public partial class MainWindow : Window
         }
 
         int insertIndex = Math.Clamp(requestedPosition.Value - 1, 0, target.Count);
+        PushUndoSnapshot();
         OnlineRecord blankRecord = OnlineRecordFactory.CreateBlankRankTimeByRecord();
 
         target.Insert(insertIndex, new RankTimeByRowView(blankRecord, tableName));
@@ -1518,6 +2149,7 @@ public partial class MainWindow : Window
         }
 
         int selectedIndex = grid.SelectedIndex;
+        PushUndoSnapshot();
         target.Remove(selected);
         RenumberCustomTable(target);
 
@@ -1830,12 +2462,256 @@ public partial class MainWindow : Window
     };
 })();
 """;
+
+    private const string JsOfflineExtractionScript = """
+(() => {
+    const expectedHeaders = ['#', 'Time', 'By', 'Score', 'LB'];
+
+    const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim();
+    const isRank = (value) => /^\d+(st|nd|rd|th)$/i.test(value) || /^\d+$/.test(value);
+
+    function normalizeSegmentText(value) {
+        return String(value || '')
+            .replace(/\u00A0/g, ' ')
+            .replace(/[\t\r\n]+/g, ' ');
+    }
+
+    function getStyle(element) {
+        const style = window.getComputedStyle(element);
+        return {
+            color: style.color,
+            backgroundColor: style.backgroundColor,
+            fontWeight: style.fontWeight,
+            fontStyle: style.fontStyle,
+            textDecoration: style.textDecorationLine,
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            className: element.className ? String(element.className) : '',
+            tag: element.tagName ? element.tagName.toLowerCase() : ''
+        };
+    }
+
+    function getTextSegments(root) {
+        const segments = [];
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const rawSegments = [];
+
+        let current;
+        while ((current = walker.nextNode())) {
+            const parent = current.parentElement || root;
+            const text = normalizeSegmentText(current.textContent);
+            if (!text)
+                continue;
+
+            rawSegments.push({ text, ...getStyle(parent) });
+        }
+
+        for (let i = 0; i < rawSegments.length; i++) {
+            const currentSegment = rawSegments[i];
+            const hasVisibleChars = /\S/.test(currentSegment.text);
+
+            if (!hasVisibleChars) {
+                const hasVisibleBefore = rawSegments.slice(0, i).some(segment => /\S/.test(segment.text));
+                const hasVisibleAfter = rawSegments.slice(i + 1).some(segment => /\S/.test(segment.text));
+                if (!hasVisibleBefore || !hasVisibleAfter)
+                    continue;
+
+                if (segments.length > 0 && /^\s+$/.test(segments[segments.length - 1].text))
+                    continue;
+
+                segments.push({ ...currentSegment, text: ' ' });
+                continue;
+            }
+
+            segments.push(currentSegment);
+        }
+
+        while (segments.length > 0 && /^\s+$/.test(segments[0].text))
+            segments.shift();
+        while (segments.length > 0 && /^\s+$/.test(segments[segments.length - 1].text))
+            segments.pop();
+
+        return segments;
+    }
+
+    function buildCellTextFromSegments(segments) {
+        return segments.map(segment => segment.text || '').join('');
+    }
+
+    function extractCell(cell) {
+        const segments = getTextSegments(cell);
+        return {
+            text: buildCellTextFromSegments(segments),
+            html: cell.innerHTML || '',
+            segments
+        };
+    }
+
+    function extractRowsFromTable(table) {
+        const rows = Array.from(table.querySelectorAll('tr'));
+        const dataRows = [];
+
+        for (const row of rows) {
+            const cells = Array.from(row.querySelectorAll(':scope > th, :scope > td'));
+            if (cells.length < 5)
+                continue;
+
+            const rowTexts = cells.map(cell => normalize(cell.textContent));
+            const isHeader = expectedHeaders.every((header, index) => rowTexts[index] === header);
+            if (isHeader)
+                continue;
+
+            if (!isRank(rowTexts[0]))
+                continue;
+
+            dataRows.push({
+                rank: extractCell(cells[0]),
+                time: extractCell(cells[1]),
+                by: extractCell(cells[2]),
+                score: extractCell(cells[3]),
+                lb: extractCell(cells[4])
+            });
+        }
+
+        return dataRows;
+    }
+
+    function findTableWithHeaders() {
+        const tables = Array.from(document.querySelectorAll('table'));
+        for (const table of tables) {
+            const headerCells = Array.from(table.querySelectorAll('th, thead td')).map(cell => normalize(cell.textContent));
+            if (expectedHeaders.every(header => headerCells.includes(header)))
+                return table;
+        }
+        return null;
+    }
+
+    function findHeaderRowElement() {
+        const candidates = Array.from(document.querySelectorAll('tr, div'));
+        for (const candidate of candidates) {
+            const children = Array.from(candidate.children);
+            if (children.length < 5)
+                continue;
+
+            const texts = children.slice(0, 5).map(child => normalize(child.textContent));
+            const same = expectedHeaders.every((header, index) => texts[index] === header);
+            if (same)
+                return candidate;
+        }
+
+        return null;
+    }
+
+    function extractRowsFromGenericContainer(headerRow) {
+        const parent = headerRow.parentElement;
+        if (!parent)
+            return [];
+
+        const siblings = Array.from(parent.children);
+        const startIndex = siblings.indexOf(headerRow);
+        const rows = [];
+
+        for (let i = startIndex + 1; i < siblings.length; i++) {
+            const row = siblings[i];
+            const cells = Array.from(row.children).filter(child => normalize(child.textContent).length > 0);
+            if (cells.length < 5)
+                continue;
+
+            const firstCell = normalize(cells[0].textContent);
+            if (!isRank(firstCell))
+                continue;
+
+            rows.push({
+                rank: extractCell(cells[0]),
+                time: extractCell(cells[1]),
+                by: extractCell(cells[2]),
+                score: extractCell(cells[3]),
+                lb: extractCell(cells[4])
+            });
+        }
+
+        return rows;
+    }
+
+    function isMeaningfulTrackName(text) {
+        text = normalize(text);
+        if (!text) return false;
+
+        const lowered = text.toLowerCase();
+        const blocked = new Set([
+            'tmnf-x', 'home', 'tracks', 'trackpacks', 'videos', 'leaderboards',
+            'account', 'forums', 'beta area', 'users', 'about', 'track information',
+            'show stats', 'log in', 'upload', 'offline records'
+        ]);
+
+        if (blocked.has(lowered)) return false;
+        if (text.length > 80) return false;
+        return true;
+    }
+
+    function findTrackName() {
+        const breadcrumbContainers = Array.from(document.querySelectorAll('[class*="breadcrumb"], .breadcrumb, nav'));
+        for (const container of breadcrumbContainers) {
+            const parts = Array.from(container.querySelectorAll('*'))
+                .map(el => normalize(el.textContent))
+                .filter(isMeaningfulTrackName);
+
+            const tracksIndex = parts.map(p => p.toLowerCase()).lastIndexOf('tracks');
+            if (tracksIndex >= 0 && tracksIndex + 1 < parts.length)
+                return parts[tracksIndex + 1];
+        }
+
+        const headingSelectors = ['h1', 'h2', 'h3', 'h4', '.card-title', '[class*="title"]', '[class*="trackname"]'];
+        for (const selector of headingSelectors) {
+            const candidates = Array.from(document.querySelectorAll(selector))
+                .map(el => normalize(el.textContent))
+                .filter(isMeaningfulTrackName);
+            if (candidates.length)
+                return candidates[0];
+        }
+
+        const metaTitle = document.querySelector('meta[property="og:title"]')?.content || '';
+        if (isMeaningfulTrackName(metaTitle))
+            return normalize(metaTitle);
+
+        return '';
+    }
+
+    let records = [];
+    let source = '';
+
+    const table = findTableWithHeaders();
+    if (table) {
+        records = extractRowsFromTable(table);
+        source = 'table';
+    }
+
+    if (!records.length) {
+        const headerRow = findHeaderRowElement();
+        if (headerRow) {
+            records = extractRowsFromGenericContainer(headerRow);
+            source = 'generic';
+        }
+    }
+
+    records = records.slice(0, 10);
+
+    return {
+        success: records.length > 0,
+        message: records.length > 0 ? `Bulundu (${source})` : 'Offline tablo bulunamadı',
+        trackName: findTrackName(),
+        recordCount: records.length,
+        records
+    };
+})();
+""";
 }
 
 public enum SelectionSource
 {
     None,
     FullRecord,
+    OfflineRecord,
     Table1,
     Table2
 }
@@ -1846,7 +2722,18 @@ public sealed class ExtractionResult
     public string Message { get; set; } = string.Empty;
     public string TrackName { get; set; } = string.Empty;
     public int RecordCount { get; set; }
+    public int OfflineRecordCount { get; set; }
     public List<OnlineRecord> Records { get; set; } = new();
+    public List<OfflineRecord> OfflineRecords { get; set; } = new();
+}
+
+public sealed class OfflineExtractionResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string TrackName { get; set; } = string.Empty;
+    public int RecordCount { get; set; }
+    public List<OfflineRecord> Records { get; set; } = new();
 }
 
 public sealed class OnlineRecord
@@ -1856,6 +2743,15 @@ public sealed class OnlineRecord
     public CellData Mode { get; set; } = new();
     public CellData By { get; set; } = new();
     public CellData Server { get; set; } = new();
+}
+
+public sealed class OfflineRecord
+{
+    public CellData Rank { get; set; } = new();
+    public CellData Time { get; set; } = new();
+    public CellData By { get; set; } = new();
+    public CellData Score { get; set; } = new();
+    public CellData LB { get; set; } = new();
 }
 
 public sealed class CellData
@@ -1978,6 +2874,21 @@ public static class OnlineRecordCloner
     }
 }
 
+public static class OfflineRecordCloner
+{
+    public static OfflineRecord Clone(OfflineRecord source)
+    {
+        return new OfflineRecord
+        {
+            Rank = OnlineRecordCloner.CloneCell(source.Rank),
+            Time = OnlineRecordCloner.CloneCell(source.Time),
+            By = OnlineRecordCloner.CloneCell(source.By),
+            Score = OnlineRecordCloner.CloneCell(source.Score),
+            LB = OnlineRecordCloner.CloneCell(source.LB)
+        };
+    }
+}
+
 public static class ExtractionResultCloner
 {
     public static ExtractionResult Clone(ExtractionResult source)
@@ -1988,7 +2899,9 @@ public static class ExtractionResultCloner
             Message = source.Message,
             TrackName = source.TrackName,
             RecordCount = source.RecordCount,
-            Records = source.Records.Select(OnlineRecordCloner.CloneFullRecord).ToList()
+            OfflineRecordCount = source.OfflineRecordCount,
+            Records = source.Records.Select(OnlineRecordCloner.CloneFullRecord).ToList(),
+            OfflineRecords = source.OfflineRecords.Select(OfflineRecordCloner.Clone).ToList()
         };
     }
 }
@@ -2129,6 +3042,38 @@ public sealed class OnlineRecordRowView : ObservableObject
     }
 }
 
+public sealed class OfflineRecordRowView : ObservableObject
+{
+    public OfflineRecordRowView(OfflineRecord source)
+    {
+        Source = source;
+        RefreshFromSource();
+    }
+
+    public OfflineRecord Source { get; }
+
+    private string _rank = string.Empty;
+    private string _time = string.Empty;
+    private string _by = string.Empty;
+    private string _score = string.Empty;
+    private string _lb = string.Empty;
+
+    public string Rank { get => _rank; private set => SetProperty(ref _rank, value); }
+    public string Time { get => _time; private set => SetProperty(ref _time, value); }
+    public string By { get => _by; private set => SetProperty(ref _by, value); }
+    public string Score { get => _score; private set => SetProperty(ref _score, value); }
+    public string LB { get => _lb; private set => SetProperty(ref _lb, value); }
+
+    public void RefreshFromSource()
+    {
+        Rank = CellDataUtilities.BuildCellText(Source.Rank);
+        Time = CellDataUtilities.BuildCellText(Source.Time);
+        By = CellDataUtilities.BuildCellText(Source.By);
+        Score = CellDataUtilities.BuildCellText(Source.Score);
+        LB = CellDataUtilities.BuildCellText(Source.LB);
+    }
+}
+
 public sealed class RankTimeByRowView : ObservableObject
 {
     public RankTimeByRowView(OnlineRecord source, string tableName)
@@ -2157,6 +3102,8 @@ public sealed class RankTimeByRowView : ObservableObject
     }
 }
 
+public sealed record MergedRankTimeByItem(OnlineRecord Record, int? NormalizedTime, int OriginalIndex, bool IsOffline);
+
 public sealed class PreviewRecordRowView
 {
     public List<TextSegment> RankSegments { get; init; } = new();
@@ -2164,16 +3111,21 @@ public sealed class PreviewRecordRowView
     public List<TextSegment> ModeSegments { get; init; } = new();
     public List<TextSegment> BySegments { get; init; } = new();
     public List<TextSegment> ServerSegments { get; init; } = new();
+    public List<TextSegment> ScoreSegments { get; init; } = new();
+    public List<TextSegment> LBSegments { get; init; } = new();
 
-    public static PreviewRecordRowView CreatePlaceholder()
+    public static PreviewRecordRowView CreatePlaceholder(bool isOffline)
     {
+        var placeholder = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") };
         return new PreviewRecordRowView
         {
-            RankSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
-            TimeSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
-            ModeSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
-            BySegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
-            ServerSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") }
+            RankSegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList(),
+            TimeSegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList(),
+            ModeSegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList(),
+            BySegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList(),
+            ServerSegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList(),
+            ScoreSegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList(),
+            LBSegments = placeholder.Select(OnlineRecordCloner.CloneSegment).ToList()
         };
     }
 
@@ -2189,7 +3141,27 @@ public sealed class PreviewRecordRowView
             TimeSegments = CloneOrPlaceholder(record.Time),
             ModeSegments = source == SelectionSource.FullRecord ? CloneOrPlaceholder(record.Mode) : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
             BySegments = CloneOrPlaceholder(record.By),
-            ServerSegments = source == SelectionSource.FullRecord ? CloneOrPlaceholder(record.Server) : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") }
+            ServerSegments = source == SelectionSource.FullRecord ? CloneOrPlaceholder(record.Server) : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            ScoreSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            LBSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") }
+        };
+    }
+
+    public static PreviewRecordRowView FromOfflineRecord(OfflineRecord record)
+    {
+        static List<TextSegment> CloneOrPlaceholder(CellData cell) => cell.Segments.Count > 0
+            ? cell.Segments.Select(OnlineRecordCloner.CloneSegment).ToList()
+            : new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") };
+
+        return new PreviewRecordRowView
+        {
+            RankSegments = CloneOrPlaceholder(record.Rank),
+            TimeSegments = CloneOrPlaceholder(record.Time),
+            ModeSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            BySegments = CloneOrPlaceholder(record.By),
+            ServerSegments = new List<TextSegment> { OnlineRecordFactory.CreatePreviewSegment("-") },
+            ScoreSegments = CloneOrPlaceholder(record.Score),
+            LBSegments = CloneOrPlaceholder(record.LB)
         };
     }
 }
@@ -2284,6 +3256,8 @@ public sealed class AppState
     public List<OnlineRecord> Table1Rows { get; set; } = new();
     public List<OnlineRecord> Table2Rows { get; set; } = new();
     public List<BookmarkStateItem> Bookmarks { get; set; } = new();
+    public string LastImportExportDirectory { get; set; } = string.Empty;
+    public bool ShowOfflineRecordsTab { get; set; }
     public SelectionState? Selection { get; set; }
     public List<GridColumnState> ColumnWidths { get; set; } = new();
     public List<LayoutLengthState> LayoutLengths { get; set; } = new();
@@ -2305,6 +3279,7 @@ public sealed class SelectionState
 {
     public SelectionSource Source { get; set; } = SelectionSource.None;
     public int RecordsSelectedIndex { get; set; } = -1;
+    public int OfflineRecordsSelectedIndex { get; set; } = -1;
     public int Table1SelectedIndex { get; set; } = -1;
     public int Table2SelectedIndex { get; set; } = -1;
     public int SegmentsSelectedIndex { get; set; } = -1;
