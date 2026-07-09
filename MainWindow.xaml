@@ -1,0 +1,155 @@
+<Window x:Class="TmnfDedimaniaScraper.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="TMNF Dedimania Online Records Scraper"
+        Width="1400"
+        Height="900"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="260"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="UrlTextBox"
+                     Grid.Column="0"
+                     Margin="0,0,8,0"
+                     Padding="8"
+                     FontSize="14"
+                     Text="https://tmnf.exchange/trackshow/9684537"/>
+
+            <Button Grid.Column="1"
+                    x:Name="LoadButton"
+                    Width="120"
+                    Height="36"
+                    Margin="0,0,8,0"
+                    Click="LoadButton_Click"
+                    Content="Sayfayı Aç"/>
+
+            <Button Grid.Column="2"
+                    x:Name="ScrapeButton"
+                    Width="120"
+                    Height="36"
+                    Margin="0,0,8,0"
+                    Click="ScrapeButton_Click"
+                    Content="Veriyi Çek"/>
+
+            <Button Grid.Column="3"
+                    x:Name="ExportButton"
+                    Width="120"
+                    Height="36"
+                    Click="ExportButton_Click"
+                    Content="JSON Kaydet"/>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.2*"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6" Margin="0,0,8,0">
+                <Grid>
+                    <wv2:WebView2 x:Name="Browser" xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Çekilen kayıtlar" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+                    <DataGrid Grid.Row="1"
+                              x:Name="RecordsGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              SelectionChanged="RecordsGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="70"/>
+                            <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="120"/>
+                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="70"/>
+                            <DataGridTextColumn Header="By" Binding="{Binding By}" Width="*"/>
+                            <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,10,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6" Margin="0,0,8,0">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Seçili satırın segment detayları" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <DataGrid Grid.Row="1"
+                              x:Name="SegmentsGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Alan" Binding="{Binding CellName}" Width="90"/>
+                            <DataGridTextColumn Header="Text" Binding="{Binding Text}" Width="*"/>
+                            <DataGridTextColumn Header="Color" Binding="{Binding Color}" Width="150"/>
+                            <DataGridTextColumn Header="Weight" Binding="{Binding FontWeight}" Width="90"/>
+                            <DataGridTextColumn Header="Style" Binding="{Binding FontStyle}" Width="90"/>
+                            <DataGridTextColumn Header="Decoration" Binding="{Binding TextDecoration}" Width="120"/>
+                            <DataGridTextColumn Header="Class" Binding="{Binding ClassName}" Width="160"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Ham JSON" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBox Grid.Row="1"
+                             x:Name="JsonTextBox"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <StatusBar Grid.Row="3">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusText" Text="Hazır"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
