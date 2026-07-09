@@ -362,7 +362,7 @@
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="Çekilen kayıtlar" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="  •  Veriyi çek dediğinde eski sonuçlar temizlenir" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}"/>
+                        <TextBlock x:Name="TrackNameHeaderText" Text="  •  -" Margin="8,0,0,0" Foreground="{StaticResource SubtleForegroundBrush}"/>
                     </StackPanel>
 
                     <DataGrid Grid.Row="1"
@@ -397,7 +397,28 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="Tablo 1" FontWeight="SemiBold" Foreground="#93C5FD" Margin="0,0,0,8"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Tablo 1" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            x:Name="Table1MenuButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="30"
+                                            Height="26"
+                                            Padding="0"
+                                            Click="Table1MenuButton_Click"
+                                            Content="▾">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Export (.txt)" Click="ExportTable1MenuItem_Click"/>
+                                                <MenuItem Header="Import (.txt)" Click="ImportTable1MenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </Grid>
 
                                 <Grid Grid.Row="1" Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
@@ -433,7 +454,28 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="Tablo 2" FontWeight="SemiBold" Foreground="#93C5FD" Margin="0,0,0,8"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Tablo 2" FontWeight="SemiBold" Foreground="#93C5FD" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            x:Name="Table2MenuButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="30"
+                                            Height="26"
+                                            Padding="0"
+                                            Click="Table2MenuButton_Click"
+                                            Content="▾">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Export (.txt)" Click="ExportTable2MenuItem_Click"/>
+                                                <MenuItem Header="Import (.txt)" Click="ImportTable2MenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </Grid>
 
                                 <Grid Grid.Row="1" Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>

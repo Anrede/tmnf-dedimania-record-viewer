@@ -17,6 +17,8 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
+using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
 
 namespace TmnfDedimaniaScraper;
@@ -42,14 +44,27 @@ public partial class MainWindow : Window
     private bool _suppressStyleSelectionEvent;
     private bool _suppressPaletteApply;
     private Color? _pendingEditorColor;
+    private string _currentTrackName = string.Empty;
 
     private const string AppFolderName = "TmnfDedimaniaScraper";
     private static string AppDataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolderName);
     private static string BookmarksFilePath => Path.Combine(AppDataDirectory, "bookmarks.json");
+    private static string AppStateFilePath => Path.Combine(AppDataDirectory, "appstate.json");
+
+    private readonly DispatcherTimer _saveStateTimer;
+    private bool _isRestoringState;
+    private AppState? _loadedAppState;
+    private bool _columnStateTrackingAttached;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _saveStateTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(700)
+        };
+        _saveStateTimer.Tick += SaveStateTimer_Tick;
 
         RecordsGrid.ItemsSource = _rows;
         Table1Grid.ItemsSource = _table1Rows;
@@ -60,13 +75,358 @@ public partial class MainWindow : Window
 
         InitializeColorPalette();
         LoadBookmarks();
+        _loadedAppState = LoadAppState();
+        ApplyLoadedState(_loadedAppState);
+
         Loaded += MainWindow_Loaded;
+        Closing += MainWindow_Closing;
+        LocationChanged += WindowGeometryChanged;
+        SizeChanged += WindowGeometryChanged;
+        StateChanged += WindowGeometryChanged;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        AttachColumnStateTracking();
+        ApplyDeferredLoadedState(_loadedAppState);
+
         await InitializeBrowserAsync();
         await NavigateAsync(UrlTextBox.Text);
+    }
+
+    private void SaveStateTimer_Tick(object? sender, EventArgs e)
+    {
+        _saveStateTimer.Stop();
+        SaveAppStateImmediate();
+    }
+
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        SaveAppStateImmediate();
+    }
+
+    private void WindowGeometryChanged(object? sender, EventArgs e)
+    {
+        QueueSaveState();
+    }
+
+    private void QueueSaveState()
+    {
+        if (_isRestoringState)
+            return;
+
+        _saveStateTimer.Stop();
+        _saveStateTimer.Start();
+    }
+
+    private void AttachColumnStateTracking()
+    {
+        if (_columnStateTrackingAttached)
+            return;
+
+        _columnStateTrackingAttached = true;
+
+        foreach (var grid in EnumerateStatefulGrids())
+        {
+            grid.ColumnReordered += StatefulGrid_ColumnStateChanged;
+
+            foreach (var column in grid.Columns)
+            {
+                var descriptor = DependencyPropertyDescriptor.FromProperty(DataGridColumn.WidthProperty, typeof(DataGridColumn));
+                descriptor?.AddValueChanged(column, StatefulGrid_ColumnWidthChanged);
+            }
+        }
+    }
+
+    private IEnumerable<DataGrid> EnumerateStatefulGrids()
+    {
+        yield return RecordsGrid;
+        yield return Table1Grid;
+        yield return Table2Grid;
+        yield return SegmentsGrid;
+        yield return ColorPaletteGrid;
+    }
+
+    private void StatefulGrid_ColumnStateChanged(object? sender, EventArgs e)
+    {
+        QueueSaveState();
+    }
+
+    private void StatefulGrid_ColumnWidthChanged(object? sender, EventArgs e)
+    {
+        QueueSaveState();
+    }
+
+    private AppState? LoadAppState()
+    {
+        try
+        {
+            Directory.CreateDirectory(AppDataDirectory);
+            if (!File.Exists(AppStateFilePath))
+                return null;
+
+            return JsonSerializer.Deserialize<AppState>(File.ReadAllText(AppStateFilePath), JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Durum yüklenemedi: {ex.Message}";
+            return null;
+        }
+    }
+
+    private void ApplyLoadedState(AppState? state)
+    {
+        if (state is null)
+            return;
+
+        _isRestoringState = true;
+        try
+        {
+            ApplyWindowState(state);
+
+            if (!string.IsNullOrWhiteSpace(state.LastUrl))
+                UrlTextBox.Text = NormalizeUrl(state.LastUrl);
+
+            if (!string.IsNullOrWhiteSpace(state.LastPageTitle))
+                _currentPageTitle = state.LastPageTitle;
+
+            if (state.Bookmarks.Count > 0)
+            {
+                _bookmarks.Clear();
+                foreach (var bookmark in state.Bookmarks.Where(b => !string.IsNullOrWhiteSpace(b.Url)))
+                    _bookmarks.Add(new BookmarkItem { Title = bookmark.Title ?? string.Empty, Url = bookmark.Url ?? string.Empty });
+
+                RefreshBookmarksBar();
+            }
+
+            RestoreResultState(state);
+
+            Table1RankInput.Text = state.Table1InsertText ?? string.Empty;
+            Table2RankInput.Text = state.Table2InsertText ?? string.Empty;
+        }
+        finally
+        {
+            _isRestoringState = false;
+        }
+    }
+
+    private void ApplyDeferredLoadedState(AppState? state)
+    {
+        if (state is null)
+            return;
+
+        _isRestoringState = true;
+        try
+        {
+            ApplyColumnWidths(state.ColumnWidths);
+            RestoreSelections(state.Selection);
+        }
+        finally
+        {
+            _isRestoringState = false;
+        }
+    }
+
+    private void ApplyWindowState(AppState state)
+    {
+        if (state.WindowWidth > 400)
+            Width = state.WindowWidth;
+        if (state.WindowHeight > 300)
+            Height = state.WindowHeight;
+        if (!double.IsNaN(state.WindowLeft))
+            Left = state.WindowLeft;
+        if (!double.IsNaN(state.WindowTop))
+            Top = state.WindowTop;
+
+        WindowState = string.Equals(state.WindowState, nameof(System.Windows.WindowState.Maximized), StringComparison.OrdinalIgnoreCase)
+            ? WindowState.Maximized
+            : WindowState.Normal;
+    }
+
+    private void RestoreResultState(AppState state)
+    {
+        UnhookSegmentRows();
+        _rows.Clear();
+        _table1Rows.Clear();
+        _table2Rows.Clear();
+        _segments.Clear();
+        _currentSelectedRecord = null;
+        _currentSelectedSegment = null;
+        _currentSelectionSource = SelectionSource.None;
+
+        _lastExtraction = state.LastExtraction is null ? null : ExtractionResultCloner.Clone(state.LastExtraction);
+
+        if (_lastExtraction?.Records is not null)
+        {
+            foreach (var record in _lastExtraction.Records)
+            {
+                EnsureEditableSegments(record.Rank);
+                EnsureEditableSegments(record.Time);
+                EnsureEditableSegments(record.Mode);
+                EnsureEditableSegments(record.By);
+                EnsureEditableSegments(record.Server);
+                _rows.Add(new OnlineRecordRowView(record));
+            }
+        }
+
+        foreach (var record in state.Table1Rows.Select(OnlineRecordCloner.CloneRankTimeByRecord))
+        {
+            EnsureEditableSegments(record.Rank);
+            EnsureEditableSegments(record.Time);
+            EnsureEditableSegments(record.By);
+            _table1Rows.Add(new RankTimeByRowView(record, "Tablo 1"));
+        }
+
+        foreach (var record in state.Table2Rows.Select(OnlineRecordCloner.CloneRankTimeByRecord))
+        {
+            EnsureEditableSegments(record.Rank);
+            EnsureEditableSegments(record.Time);
+            EnsureEditableSegments(record.By);
+            _table2Rows.Add(new RankTimeByRowView(record, "Tablo 2"));
+        }
+
+        RenumberCustomTable(_table1Rows);
+        RenumberCustomTable(_table2Rows);
+
+        UpdateTrackNameHeader(state.TrackName);
+        RefreshJsonText();
+
+        if (_rows.Count == 0 && _table1Rows.Count == 0 && _table2Rows.Count == 0)
+            ResetPreview();
+    }
+
+    private void RestoreSelections(SelectionState? selection)
+    {
+        if (selection is null)
+            return;
+
+        int recordsIndex = CoerceIndex(selection.RecordsSelectedIndex, _rows.Count);
+        int table1Index = CoerceIndex(selection.Table1SelectedIndex, _table1Rows.Count);
+        int table2Index = CoerceIndex(selection.Table2SelectedIndex, _table2Rows.Count);
+
+        switch (selection.Source)
+        {
+            case SelectionSource.Table1 when table1Index >= 0:
+                Table1Grid.SelectedIndex = table1Index;
+                break;
+            case SelectionSource.Table2 when table2Index >= 0:
+                Table2Grid.SelectedIndex = table2Index;
+                break;
+            case SelectionSource.FullRecord when recordsIndex >= 0:
+                RecordsGrid.SelectedIndex = recordsIndex;
+                break;
+            default:
+                if (recordsIndex >= 0)
+                    RecordsGrid.SelectedIndex = recordsIndex;
+                break;
+        }
+
+        if (selection.SegmentsSelectedIndex >= 0 && selection.SegmentsSelectedIndex < _segments.Count)
+            SegmentsGrid.SelectedIndex = selection.SegmentsSelectedIndex;
+    }
+
+    private static int CoerceIndex(int index, int count)
+    {
+        return index >= 0 && index < count ? index : -1;
+    }
+
+    private void ApplyColumnWidths(List<GridColumnState> columnStates)
+    {
+        if (columnStates.Count == 0)
+            return;
+
+        foreach (var grid in EnumerateStatefulGrids())
+        {
+            string gridKey = GetGridStateKey(grid);
+            var gridStates = columnStates.Where(c => string.Equals(c.GridKey, gridKey, StringComparison.Ordinal)).ToList();
+            if (gridStates.Count == 0)
+                continue;
+
+            for (int i = 0; i < grid.Columns.Count; i++)
+            {
+                var saved = gridStates.FirstOrDefault(c => c.ColumnIndex == i);
+                if (saved is null || saved.Width <= 0)
+                    continue;
+
+                grid.Columns[i].Width = new DataGridLength(saved.Width);
+            }
+        }
+    }
+
+    private void SaveAppStateImmediate()
+    {
+        if (_isRestoringState)
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(AppDataDirectory);
+
+            Rect bounds = WindowState == WindowState.Normal
+                ? new Rect(Left, Top, Width, Height)
+                : RestoreBounds;
+
+            var state = new AppState
+            {
+                WindowLeft = bounds.Left,
+                WindowTop = bounds.Top,
+                WindowWidth = bounds.Width,
+                WindowHeight = bounds.Height,
+                WindowState = WindowState == System.Windows.WindowState.Maximized ? nameof(System.Windows.WindowState.Maximized) : nameof(System.Windows.WindowState.Normal),
+                LastUrl = GetCurrentUrl(),
+                LastPageTitle = _currentPageTitle,
+                TrackName = _currentTrackName,
+                LastExtraction = _lastExtraction is null ? null : ExtractionResultCloner.Clone(_lastExtraction),
+                Table1Rows = _table1Rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList(),
+                Table2Rows = _table2Rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList(),
+                Bookmarks = _bookmarks.Select(b => new BookmarkStateItem { Title = b.Title, Url = b.Url }).ToList(),
+                Table1InsertText = Table1RankInput.Text ?? string.Empty,
+                Table2InsertText = Table2RankInput.Text ?? string.Empty,
+                Selection = new SelectionState
+                {
+                    Source = _currentSelectionSource,
+                    RecordsSelectedIndex = RecordsGrid.SelectedIndex,
+                    Table1SelectedIndex = Table1Grid.SelectedIndex,
+                    Table2SelectedIndex = Table2Grid.SelectedIndex,
+                    SegmentsSelectedIndex = SegmentsGrid.SelectedIndex
+                },
+                ColumnWidths = CaptureColumnWidths()
+            };
+
+            File.WriteAllText(AppStateFilePath, JsonSerializer.Serialize(state, JsonOptions));
+            File.WriteAllText(BookmarksFilePath, JsonSerializer.Serialize(_bookmarks, JsonOptions));
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Durum kaydedilemedi: {ex.Message}";
+        }
+    }
+
+    private List<GridColumnState> CaptureColumnWidths()
+    {
+        var result = new List<GridColumnState>();
+
+        foreach (var grid in EnumerateStatefulGrids())
+        {
+            string gridKey = GetGridStateKey(grid);
+            for (int i = 0; i < grid.Columns.Count; i++)
+            {
+                result.Add(new GridColumnState
+                {
+                    GridKey = gridKey,
+                    ColumnIndex = i,
+                    Header = grid.Columns[i].Header?.ToString() ?? string.Empty,
+                    Width = grid.Columns[i].ActualWidth > 0 ? grid.Columns[i].ActualWidth : grid.Columns[i].Width.DisplayValue
+                });
+            }
+        }
+
+        return result;
+    }
+
+    private static string GetGridStateKey(DataGrid grid)
+    {
+        return grid.Name ?? string.Empty;
     }
 
     private void InitializeColorPalette()
@@ -134,6 +494,7 @@ public partial class MainWindow : Window
         {
             UrlTextBox.Text = Browser.Source?.ToString() ?? Browser.CoreWebView2?.Source ?? UrlTextBox.Text;
             UpdateNavigationButtons();
+            QueueSaveState();
         });
     }
 
@@ -142,6 +503,7 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             _currentPageTitle = Browser.CoreWebView2?.DocumentTitle ?? string.Empty;
+            QueueSaveState();
         });
     }
 
@@ -220,6 +582,8 @@ public partial class MainWindow : Window
             _lastExtraction = extraction;
             RefreshJsonText();
 
+            UpdateTrackNameHeader(extraction.TrackName);
+
             if (extraction.Success)
                 FillGrids(extraction);
             else
@@ -228,6 +592,8 @@ public partial class MainWindow : Window
             StatusText.Text = extraction.Success
                 ? $"{extraction.Records.Count} kayıt çekildi. Tablo 1 ve Tablo 2 otomatik dolduruldu. İstersen konuma göre boş satır ekleyebilirsin."
                 : $"Sonuç yok: {extraction.Message}";
+
+            QueueSaveState();
         }
         catch (Exception ex)
         {
@@ -360,6 +726,7 @@ public partial class MainWindow : Window
         {
             SynchronizeActiveGrid(RecordsGrid);
             SelectRecord(row.Source, SelectionSource.FullRecord);
+            QueueSaveState();
         }
     }
 
@@ -372,6 +739,7 @@ public partial class MainWindow : Window
         {
             SynchronizeActiveGrid(Table1Grid);
             SelectRecord(row.Source, SelectionSource.Table1);
+            QueueSaveState();
         }
     }
 
@@ -384,6 +752,7 @@ public partial class MainWindow : Window
         {
             SynchronizeActiveGrid(Table2Grid);
             SelectRecord(row.Source, SelectionSource.Table2);
+            QueueSaveState();
         }
     }
 
@@ -465,6 +834,8 @@ public partial class MainWindow : Window
 
         if (ReferenceEquals(row, _currentSelectedSegment))
             LoadSelectedSegmentEditor(row);
+
+        QueueSaveState();
     }
 
     private void RefreshAllViewTexts()
@@ -485,6 +856,7 @@ public partial class MainWindow : Window
         {
             _currentSelectedSegment = row;
             LoadSelectedSegmentEditor(row);
+            QueueSaveState();
         }
         else
         {
@@ -687,14 +1059,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool first = true;
         foreach (var segment in cell.Segments)
         {
-            if (!first)
-                target.Inlines.Add(new Run(" "));
-
-            first = false;
-
             var run = new Run(segment.Text)
             {
                 Foreground = CssColorHelper.ToBrush(segment.Color, Brushes.White),
@@ -767,6 +1133,16 @@ public partial class MainWindow : Window
         JsonTextBox.Text = JsonSerializer.Serialize(_lastExtraction, JsonOptions);
     }
 
+    private void UpdateTrackNameHeader(string? trackName)
+    {
+        _currentTrackName = (trackName ?? string.Empty).Trim();
+        TrackNameHeaderText.Text = string.IsNullOrWhiteSpace(_currentTrackName)
+            ? "  •  Harita adı bulunamadı"
+            : $"  •  {_currentTrackName}";
+
+        QueueSaveState();
+    }
+
     private void BookmarkButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.DataContext is not BookmarkItem bookmark)
@@ -794,12 +1170,14 @@ public partial class MainWindow : Window
             SaveBookmarks();
             RefreshBookmarksBar();
             StatusText.Text = "Yer imi zaten vardı, başlığı güncellendi.";
+            QueueSaveState();
             return;
         }
 
         _bookmarks.Add(new BookmarkItem { Title = title, Url = normalizedUrl });
         SaveBookmarks();
         StatusText.Text = $"Yer imi kaydedildi: {title}";
+        QueueSaveState();
     }
 
     private void RemoveBookmarkButton_Click(object sender, RoutedEventArgs e)
@@ -816,6 +1194,7 @@ public partial class MainWindow : Window
         _bookmarks.Remove(existing);
         SaveBookmarks();
         StatusText.Text = $"Yer imi silindi: {existing.Title}";
+        QueueSaveState();
     }
 
     private string GetCurrentUrl()
@@ -890,6 +1269,160 @@ public partial class MainWindow : Window
         BookmarksItemsControl.ItemsSource = _bookmarks;
     }
 
+
+    private void Table1MenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenButtonContextMenu(sender);
+    }
+
+    private void Table2MenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenButtonContextMenu(sender);
+    }
+
+    private static void OpenButtonContextMenu(object sender)
+    {
+        if (sender is not Button button || button.ContextMenu is null)
+            return;
+
+        button.ContextMenu.PlacementTarget = button;
+        button.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        button.ContextMenu.IsOpen = true;
+    }
+
+    private void ExportTable1MenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ExportCustomTable(_table1Rows, 1, "Tablo 1");
+    }
+
+    private void ExportTable2MenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ExportCustomTable(_table2Rows, 2, "Tablo 2");
+    }
+
+    private void ImportTable1MenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ImportCustomTable(_table1Rows, Table1Grid, 1, "Tablo 1", SelectionSource.Table1);
+    }
+
+    private void ImportTable2MenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ImportCustomTable(_table2Rows, Table2Grid, 2, "Tablo 2", SelectionSource.Table2);
+    }
+
+    private void ExportCustomTable(ObservableCollection<RankTimeByRowView> rows, int tableNumber, string tableName)
+    {
+        if (rows.Count == 0)
+        {
+            MessageBox.Show($"{tableName} boş olduğu için dışa aktarılamaz.");
+            return;
+        }
+
+        string safeTrackName = GetSafeTrackNameForFileName();
+        var dialog = new SaveFileDialog
+        {
+            Title = $"{tableName} dışa aktar",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            FileName = $"{safeTrackName}-{tableNumber}.txt",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            AddExtension = true,
+            DefaultExt = ".txt"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var payload = new TableFilePayload
+        {
+            TrackName = _currentTrackName,
+            TableName = tableName,
+            ExportedAt = DateTime.Now,
+            Rows = rows.Select(r => OnlineRecordCloner.CloneRankTimeByRecord(r.Source)).ToList()
+        };
+
+        Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName)!);
+        File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(payload, JsonOptions));
+        StatusText.Text = $"{tableName} dışa aktarıldı: {Path.GetFileName(dialog.FileName)}";
+    }
+
+    private void ImportCustomTable(ObservableCollection<RankTimeByRowView> target, DataGrid grid, int tableNumber, string tableName, SelectionSource selectionSource)
+    {
+        string safeTrackName = GetSafeTrackNameForFileName();
+        var dialog = new OpenFileDialog
+        {
+            Title = $"{tableName} içe aktar",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            FileName = $"{safeTrackName}-{tableNumber}.txt",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            string json = File.ReadAllText(dialog.FileName);
+            List<OnlineRecord> rows;
+            string importedTrackName = string.Empty;
+
+            var payload = JsonSerializer.Deserialize<TableFilePayload>(json, JsonOptions);
+            if (payload?.Rows?.Count > 0)
+            {
+                rows = payload.Rows;
+                importedTrackName = payload.TrackName ?? string.Empty;
+            }
+            else
+            {
+                rows = JsonSerializer.Deserialize<List<OnlineRecord>>(json, JsonOptions) ?? new List<OnlineRecord>();
+            }
+
+            target.Clear();
+
+            foreach (var sourceRecord in rows)
+            {
+                var record = OnlineRecordCloner.CloneRankTimeByRecord(sourceRecord);
+                EnsureEditableSegments(record.Rank);
+                EnsureEditableSegments(record.Time);
+                EnsureEditableSegments(record.By);
+                target.Add(new RankTimeByRowView(record, tableName));
+            }
+
+            RenumberCustomTable(target);
+
+            if (!string.IsNullOrWhiteSpace(importedTrackName))
+                UpdateTrackNameHeader(importedTrackName);
+
+            if (target.Count > 0)
+            {
+                grid.SelectedIndex = 0;
+            }
+            else if (_currentSelectionSource == selectionSource)
+            {
+                _currentSelectedRecord = null;
+                _currentSelectionSource = SelectionSource.None;
+                _segments.Clear();
+                ResetPreview();
+                ResetSelectedSegmentEditor();
+            }
+
+            StatusText.Text = $"{tableName} içe aktarıldı: {Path.GetFileName(dialog.FileName)}";
+            QueueSaveState();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"İçe aktarma başarısız:\n{ex.Message}", "İçe Aktarma Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private string GetSafeTrackNameForFileName()
+    {
+        string raw = string.IsNullOrWhiteSpace(_currentTrackName) ? "track" : _currentTrackName;
+        char[] invalidChars = Path.GetInvalidFileNameChars();
+        string safe = new string(raw.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(safe) ? "track" : safe;
+    }
+
     private void AddTable1ItemButton_Click(object sender, RoutedEventArgs e)
     {
         InsertBlankRowIntoCustomTable(Table1RankInput.Text, _table1Rows, Table1Grid, "Tablo 1");
@@ -917,6 +1450,7 @@ public partial class MainWindow : Window
 
         targetGrid.SelectedIndex = insertIndex;
         StatusText.Text = $"{tableName} listesine {insertIndex + 1}. sıraya boş kayıt eklendi.";
+        QueueSaveState();
     }
 
     private void RemoveTable1ItemButton_Click(object sender, RoutedEventArgs e)
@@ -962,6 +1496,7 @@ public partial class MainWindow : Window
         }
 
         StatusText.Text = $"{tableName} listesinden satır silindi.";
+        QueueSaveState();
     }
 
     private void RenumberCustomTable(IEnumerable<RankTimeByRowView> rows)
@@ -1006,6 +1541,12 @@ public partial class MainWindow : Window
     const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim();
     const isRank = (value) => /^\d+(st|nd|rd|th)$/i.test(value) || /^\d+$/.test(value);
 
+    function normalizeSegmentText(value) {
+        return String(value || '')
+            .replace(/\u00A0/g, ' ')
+            .replace(/[\t\r\n]+/g, ' ');
+    }
+
     function getStyle(element) {
         const style = window.getComputedStyle(element);
         return {
@@ -1023,38 +1564,63 @@ public partial class MainWindow : Window
 
     function getTextSegments(root) {
         const segments = [];
-        const walker = document.createTreeWalker(
-            root,
-            NodeFilter.SHOW_TEXT,
-            {
-                acceptNode(node) {
-                    return normalize(node.textContent).length > 0
-                        ? NodeFilter.FILTER_ACCEPT
-                        : NodeFilter.FILTER_REJECT;
-                }
-            }
-        );
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const rawSegments = [];
 
         let current;
         while ((current = walker.nextNode())) {
             const parent = current.parentElement || root;
-            const text = current.textContent.replace(/\s+/g, ' ').trim();
-            if (!text) continue;
+            const text = normalizeSegmentText(current.textContent);
+            if (!text)
+                continue;
 
-            segments.push({
+            rawSegments.push({
                 text,
                 ...getStyle(parent)
             });
         }
 
+        for (let i = 0; i < rawSegments.length; i++) {
+            const currentSegment = rawSegments[i];
+            const hasVisibleChars = /\S/.test(currentSegment.text);
+
+            if (!hasVisibleChars) {
+                const hasVisibleBefore = rawSegments.slice(0, i).some(segment => /\S/.test(segment.text));
+                const hasVisibleAfter = rawSegments.slice(i + 1).some(segment => /\S/.test(segment.text));
+                if (!hasVisibleBefore || !hasVisibleAfter)
+                    continue;
+
+                if (segments.length > 0 && /^\s+$/.test(segments[segments.length - 1].text))
+                    continue;
+
+                segments.push({
+                    ...currentSegment,
+                    text: ' '
+                });
+                continue;
+            }
+
+            segments.push(currentSegment);
+        }
+
+        while (segments.length > 0 && /^\s+$/.test(segments[0].text))
+            segments.shift();
+        while (segments.length > 0 && /^\s+$/.test(segments[segments.length - 1].text))
+            segments.pop();
+
         return segments;
     }
 
+    function buildCellTextFromSegments(segments) {
+        return segments.map(segment => segment.text || '').join('');
+    }
+
     function extractCell(cell) {
+        const segments = getTextSegments(cell);
         return {
-            text: normalize(cell.innerText || cell.textContent || ''),
+            text: buildCellTextFromSegments(segments),
             html: cell.innerHTML || '',
-            segments: getTextSegments(cell)
+            segments
         };
     }
 
@@ -1164,9 +1730,56 @@ public partial class MainWindow : Window
         }
     }
 
+    function isMeaningfulTrackName(text) {
+        text = normalize(text);
+        if (!text) return false;
+
+        const lowered = text.toLowerCase();
+        const blocked = new Set([
+            'tmnf-x', 'home', 'tracks', 'trackpacks', 'videos', 'leaderboards',
+            'account', 'forums', 'beta area', 'users', 'about', 'track information',
+            'show stats', 'log in', 'upload'
+        ]);
+
+        if (blocked.has(lowered)) return false;
+        if (text.length > 80) return false;
+        return true;
+    }
+
+    function findTrackName() {
+        const breadcrumbContainers = Array.from(document.querySelectorAll('[class*="breadcrumb"], .breadcrumb, nav'));
+        for (const container of breadcrumbContainers) {
+            const parts = Array.from(container.querySelectorAll('*'))
+                .map(el => normalize(el.textContent))
+                .filter(isMeaningfulTrackName);
+
+            const tracksIndex = parts.map(p => p.toLowerCase()).lastIndexOf('tracks');
+            if (tracksIndex >= 0 && tracksIndex + 1 < parts.length) {
+                return parts[tracksIndex + 1];
+            }
+        }
+
+        const headingSelectors = ['h1', 'h2', 'h3', 'h4', '.card-title', '[class*="title"]', '[class*="trackname"]'];
+        for (const selector of headingSelectors) {
+            const candidates = Array.from(document.querySelectorAll(selector))
+                .map(el => normalize(el.textContent))
+                .filter(isMeaningfulTrackName);
+
+            if (candidates.length)
+                return candidates[0];
+        }
+
+        const metaTitle = document.querySelector('meta[property="og:title"]')?.content || '';
+        if (isMeaningfulTrackName(metaTitle))
+            return normalize(metaTitle);
+
+        return '';
+    }
+
     return {
         success: records.length > 0,
         message: records.length > 0 ? `Bulundu (${source})` : 'Tablo bulunamadı',
+        trackName: findTrackName(),
         recordCount: records.length,
         records
     };
@@ -1186,6 +1799,7 @@ public sealed class ExtractionResult
 {
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;
+    public string TrackName { get; set; } = string.Empty;
     public int RecordCount { get; set; }
     public List<OnlineRecord> Records { get; set; } = new();
 }
@@ -1262,6 +1876,18 @@ public static class OnlineRecordFactory
 
 public static class OnlineRecordCloner
 {
+    public static OnlineRecord CloneFullRecord(OnlineRecord source)
+    {
+        return new OnlineRecord
+        {
+            Rank = CloneCell(source.Rank),
+            Time = CloneCell(source.Time),
+            Mode = CloneCell(source.Mode),
+            By = CloneCell(source.By),
+            Server = CloneCell(source.Server)
+        };
+    }
+
     public static OnlineRecord CloneRankTimeByRecord(OnlineRecord source)
     {
         return new OnlineRecord
@@ -1298,6 +1924,21 @@ public static class OnlineRecordCloner
             FontSize = source.FontSize,
             ClassName = source.ClassName,
             Tag = source.Tag
+        };
+    }
+}
+
+public static class ExtractionResultCloner
+{
+    public static ExtractionResult Clone(ExtractionResult source)
+    {
+        return new ExtractionResult
+        {
+            Success = source.Success,
+            Message = source.Message,
+            TrackName = source.TrackName,
+            RecordCount = source.RecordCount,
+            Records = source.Records.Select(OnlineRecordCloner.CloneFullRecord).ToList()
         };
     }
 }
@@ -1382,7 +2023,7 @@ public static class CellDataUtilities
         if (cell.Segments.Count == 0)
             return cell.Text ?? string.Empty;
 
-        return string.Join(" ", cell.Segments.Select(s => s.Text).Where(t => !string.IsNullOrWhiteSpace(t))).Trim();
+        return string.Concat(cell.Segments.Select(s => s.Text ?? string.Empty));
     }
 }
 
@@ -1530,6 +2171,57 @@ public sealed class SegmentRowView : ObservableObject
         SourceSegment.Tag = Tag ?? string.Empty;
         SourceCell.Text = CellDataUtilities.BuildCellText(SourceCell);
     }
+}
+
+public sealed class TableFilePayload
+{
+    public string TrackName { get; set; } = string.Empty;
+    public string TableName { get; set; } = string.Empty;
+    public DateTime ExportedAt { get; set; }
+    public List<OnlineRecord> Rows { get; set; } = new();
+}
+
+public sealed class AppState
+{
+    public double WindowLeft { get; set; } = double.NaN;
+    public double WindowTop { get; set; } = double.NaN;
+    public double WindowWidth { get; set; }
+    public double WindowHeight { get; set; }
+    public string WindowState { get; set; } = nameof(System.Windows.WindowState.Normal);
+    public string LastUrl { get; set; } = string.Empty;
+    public string LastPageTitle { get; set; } = string.Empty;
+    public string TrackName { get; set; } = string.Empty;
+    public string Table1InsertText { get; set; } = string.Empty;
+    public string Table2InsertText { get; set; } = string.Empty;
+    public ExtractionResult? LastExtraction { get; set; }
+    public List<OnlineRecord> Table1Rows { get; set; } = new();
+    public List<OnlineRecord> Table2Rows { get; set; } = new();
+    public List<BookmarkStateItem> Bookmarks { get; set; } = new();
+    public SelectionState? Selection { get; set; }
+    public List<GridColumnState> ColumnWidths { get; set; } = new();
+}
+
+public sealed class BookmarkStateItem
+{
+    public string Title { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+}
+
+public sealed class SelectionState
+{
+    public SelectionSource Source { get; set; } = SelectionSource.None;
+    public int RecordsSelectedIndex { get; set; } = -1;
+    public int Table1SelectedIndex { get; set; } = -1;
+    public int Table2SelectedIndex { get; set; } = -1;
+    public int SegmentsSelectedIndex { get; set; } = -1;
+}
+
+public sealed class GridColumnState
+{
+    public string GridKey { get; set; } = string.Empty;
+    public int ColumnIndex { get; set; }
+    public string Header { get; set; } = string.Empty;
+    public double Width { get; set; }
 }
 
 public sealed class BookmarkItem
